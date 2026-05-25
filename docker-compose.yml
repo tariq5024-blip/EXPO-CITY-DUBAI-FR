@@ -1,0 +1,123 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: expo-fr-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1 >/dev/null"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 20s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: expo-fr-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: expo-fr-backend
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      - PORT=4000
+      - MONGODB_URI=mongodb://mongo:27017/expo-fr
+      # Must be the Compose service name from *inside* the backend container — not localhost (that is this container).
+      - OLLAMA_HOST=http://ollama:11434
+      - GSDK_SIDECAR_URL=http://gsdk-sidecar:4500
+      - GSDK_GATEWAY=${GSDK_GATEWAY:-}
+      - GSDK_USE_SSL=${GSDK_USE_SSL:-false}
+      - GSDK_DEVICE_PORT=${GSDK_DEVICE_PORT:-51211}
+      - VISITOR_QR_STORAGE_DIR=/app/data/visitor-qr-codes
+    volumes:
+      - ./data/visitor-qr-codes:/app/data/visitor-qr-codes
+    depends_on:
+      mongo:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+        required: false
+      gsdk-sidecar:
+        condition: service_started
+        required: false
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 25s
+    stop_grace_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: expo-fr-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Pre-built preview (not Vite dev): works in Cursor Simple Browser and avoids blank screen from HMR/@vite/client.
+    command: ["npm", "run", "preview"]
+    ports:
+      - "5173:5173"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5173').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 25s
+      timeout: 8s
+      retries: 5
+      start_period: 25s
+
+  gsdk-sidecar:
+    build:
+      context: .
+      dockerfile: gsdk-sidecar/Dockerfile
+    container_name: expo-fr-gsdk-sidecar
+    restart: unless-stopped
+    environment:
+      - PORT=4500
+      - GSDK_ROOT=/opt/gsdk/g-sdk-1.9.0/client/node
+      - GSDK_GATEWAY=${GSDK_GATEWAY:-}
+      - GSDK_USE_SSL=${GSDK_USE_SSL:-false}
+      - GSDK_DEVICE_PORT=${GSDK_DEVICE_PORT:-51211}
+      - GSDK_RPC_PORT=${GSDK_RPC_PORT:-4100}
+      - GSDK_TLS_CA=/opt/gateway-cert/ca.crt
+      - SUPREMA_ACCESS_GROUP_IDS=${SUPREMA_ACCESS_GROUP_IDS:-}
+      - GSDK_DEFAULT_AUTH_GROUP=${GSDK_DEFAULT_AUTH_GROUP:-0}
+    volumes:
+      - ./gateway-runtime/cert:/opt/gateway-cert:ro
+      - ./gsdk-sidecar/server.js:/app/server.js:ro
+      - ./gsdk-sidecar/face_pb.js:/opt/gsdk/g-sdk-1.9.0/client/node/biostar/service/face_pb.js:ro
+      - ./g-sdk-1.9.0/client/node/biostar/service/user_pb.js:/opt/gsdk/g-sdk-1.9.0/client/node/biostar/service/user_pb.js:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "4500:4500"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4500/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 25s
+
+volumes:
+  mongo_data:
+  ollama_data:

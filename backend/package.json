@@ -1,0 +1,27 @@
+{
+  "name": "expo-fr-backend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "seed": "node src/seed.js",
+    "purge": "node scripts/purge-operational-data.mjs",
+    "backup": "node scripts/backup-database.mjs",
+    "restore": "node scripts/restore-database.mjs",
+    "loadtest": "node scripts/load-test.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-async-errors": "^3.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.15.0",
+    "nodemailer": "^8.0.7",
+    "ollama": "^0.5.14",
+    "qrcode": "^1.5.4",
+    "ws": "^8.20.0"
+  }
+}

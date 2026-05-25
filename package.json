@@ -1,0 +1,20 @@
+{
+  "name": "expo-fr",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "build": "npm run build --workspace frontend",
+    "start:backend": "npm run start --workspace backend",
+    "seed": "npm run seed --workspace backend",
+    "docker:up": "docker compose up --build",
+    "docker:up:noai": "COMPOSE_PROFILES=\"\" docker compose up --build",
+    "docker:up:ai": "docker compose --profile ai up --build",
+    "docker:down": "docker compose down"
+  }
+}
