@@ -257,6 +257,7 @@ const api = {
   zoneDelete:     id  => apiFetch(`/locations/zones/${id}`,    { method:"DELETE" }),
 
   // superadmin
+  changePassword: b => apiFetch("/auth/change-password", { method:"POST", body:JSON.stringify(b) }),
   adminAccounts:  () => apiFetch("/superadmin/accounts"),
   adminCreate:    b  => apiFetch("/superadmin/accounts",          { method:"POST",  body:JSON.stringify(b) }),
   adminUpdate:    (id,b) => apiFetch(`/superadmin/accounts/${id}`,{ method:"PATCH", body:JSON.stringify(b) }),
@@ -422,15 +423,15 @@ html.light-theme {
   --th-muted:#64748b;
   --th-faint:#94a3b8;
   --th-textHi:#0f172a;
-  /* Accent — vibrant indigo/teal */
-  --th-blue:#4f46e5;
-  --th-blueHov:#4338ca;
-  --th-blueDim:rgba(79,70,229,.12);
-  --th-blueGlow:rgba(79,70,229,.30);
-  /* Status — more vibrant */
-  --th-green:#10b981;
-  --th-greenDim:rgba(16,185,129,.12);
-  --th-greenGlow:rgba(16,185,129,.28);
+  /* Accent — professional green (primary action colour in light theme) */
+  --th-blue:#059669;
+  --th-blueHov:#047857;
+  --th-blueDim:rgba(5,150,105,.12);
+  --th-blueGlow:rgba(5,150,105,.30);
+  /* Status greens — brighter for badges */
+  --th-green:#16a34a;
+  --th-greenDim:rgba(22,163,74,.12);
+  --th-greenGlow:rgba(22,163,74,.28);
   --th-amber:#f59e0b;
   --th-amberDim:rgba(245,158,11,.12);
   --th-amberGlow:rgba(245,158,11,.28);
@@ -449,29 +450,29 @@ html.light-theme {
   /* Stronger shadows for better elevation */
   --th-shadow:0 1px 3px rgba(0,0,0,.10),0 4px 16px rgba(0,0,0,.08);
   --th-shadowLg:0 4px 24px rgba(0,0,0,.12),0 2px 8px rgba(0,0,0,.08);
-  --th-shadowGlow:0 0 20px rgba(79,70,229,.20),0 4px 20px rgba(0,0,0,.10);
+  --th-shadowGlow:0 0 20px rgba(5,150,105,.20),0 4px 20px rgba(0,0,0,.10);
   --th-insetBevel:inset 0 1px 0 rgba(255,255,255,.98);
   --th-mono:'JetBrains Mono','Roboto Mono',monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   SIDEBAR — sleek dark navy #1e293b with indigo active highlight
+   SIDEBAR — charcoal, matches dark theme palette
 ═══════════════════════════════════════════════════════════════════ */
 html.light-theme aside{
-  background:#1e293b !important;
-  border-right:1px solid #334155 !important;
-  box-shadow:4px 0 24px rgba(0,0,0,.15) !important;
+  background:linear-gradient(180deg, #1e1e24 0%, #1a1a1f 100%) !important;
+  border-right:1px solid #2e2e3a !important;
+  box-shadow:4px 0 28px rgba(0,0,0,.28) !important;
 }
 /* ALL text inside sidebar — white */
-html.light-theme aside *{ color:#ecf0f1 !important; }
-/* Section divider labels (OVERVIEW, DEVICES etc) */
+html.light-theme aside *{ color:#e2e8f0 !important; }
+/* Section divider labels */
 html.light-theme aside nav > div{
-  color:#64748b !important;
-  opacity:1 !important;
-  border-top-color:rgba(255,255,255,.06) !important;
+  color:#94a3b8 !important;
+  opacity:.9 !important;
+  border-top-color:rgba(255,255,255,.07) !important;
   font-size:10px !important;
   letter-spacing:2px !important;
-  font-weight:600 !important;
+  font-weight:700 !important;
 }
 /* Nav item primary label */
 html.light-theme aside button > div > div:first-child{
@@ -479,60 +480,82 @@ html.light-theme aside button > div > div:first-child{
   font-weight:600 !important;
 }
 /* Nav item desc subtitle */
-html.light-theme aside button > div > div + div{ color:#94a3b8 !important; font-size:11px !important; }
-/* Icon chips */
+html.light-theme aside button > div > div + div{ color:#94a3b8 !important; font-size:11px !important; opacity:.85 !important; }
+/* Icon chips — default */
 html.light-theme aside .icon-chip{
-  background:rgba(255,255,255,.08) !important;
-  border-color:rgba(255,255,255,.15) !important;
+  background:rgba(255,255,255,.07) !important;
+  border-color:rgba(255,255,255,.12) !important;
   color:#cbd5e1 !important;
-  box-shadow:0 1px 2px rgba(0,0,0,.10) !important;
+  box-shadow:0 1px 2px rgba(0,0,0,.30) !important;
 }
-/* Inactive nav button hover */
+/* Inactive nav button hover — white glow effect */
 html.light-theme aside button:hover{
-  background:rgba(255,255,255,.08) !important;
+  background:rgba(255,255,255,.09) !important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10), 0 0 16px rgba(255,255,255,.04) !important;
 }
-/* ACTIVE nav item — indigo left border + indigo text */
+html.light-theme aside button:hover .icon-chip{
+  background:rgba(255,255,255,.14) !important;
+  border-color:rgba(255,255,255,.22) !important;
+  color:#ffffff !important;
+  box-shadow:0 0 10px rgba(255,255,255,.12) !important;
+}
+html.light-theme aside button:hover > div > div:first-child{ color:#ffffff !important; }
+/* ACTIVE nav item — white left border + white highlight */
 html.light-theme aside button[style*="linear-gradient"]{
-  background:rgba(79,70,229,.15) !important;
-  border-left:3px solid #4f46e5 !important;
+  background:rgba(255,255,255,.10) !important;
+  border-left:3px solid rgba(255,255,255,.70) !important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08) !important;
 }
-html.light-theme aside button[style*="linear-gradient"] *{ color:#6366f1 !important; }
+html.light-theme aside button[style*="linear-gradient"] *{ color:#ffffff !important; }
 html.light-theme aside button[style*="linear-gradient"] .icon-chip{
-  background:rgba(79,70,229,.25) !important;
-  border-color:rgba(79,70,229,.50) !important;
-  color:#818cf8 !important;
+  background:rgba(255,255,255,.16) !important;
+  border-color:rgba(255,255,255,.30) !important;
+  color:#ffffff !important;
+  box-shadow:0 0 12px rgba(255,255,255,.15) !important;
 }
-/* Logo header — slightly darker */
+/* Logo header */
 html.light-theme aside > div:first-child{
-  background:#0f172a !important;
-  border-bottom:1px solid rgba(255,255,255,.06) !important;
+  background:linear-gradient(180deg,#212128,#1e1e24) !important;
+  border-bottom:1px solid rgba(255,255,255,.08) !important;
+  box-shadow:0 1px 12px rgba(0,0,0,.20) !important;
 }
-html.light-theme aside > div:first-child *{ color:#f8fafc !important; }
+html.light-theme aside > div:first-child *{ color:#f1f5f9 !important; }
+/* Collapse toggle button */
+html.light-theme aside > div:first-child button{
+  background:rgba(255,255,255,.08) !important;
+  border-color:rgba(255,255,255,.18) !important;
+  color:#cbd5e1 !important;
+}
+html.light-theme aside > div:first-child button:hover{
+  background:rgba(255,255,255,.16) !important;
+  color:#ffffff !important;
+}
 /* User footer */
 html.light-theme aside > div:last-child{
-  background:#0f172a !important;
-  border-top:1px solid rgba(255,255,255,.06) !important;
+  background:linear-gradient(180deg,#1e1e24,#1a1a1f) !important;
+  border-top:1px solid rgba(255,255,255,.07) !important;
 }
 html.light-theme aside > div:last-child *{ color:#cbd5e1 !important; }
+html.light-theme aside > div:last-child div[style*="color"]{ color:#e2e8f0 !important; }
 /* Expand/collapse toggle strip */
 html.light-theme aside > div[style*="borderTop"]:not(:first-child):not(:last-child){
-  background:#1e293b !important;
-  border-top-color:rgba(255,255,255,.06) !important;
+  background:#1e1e24 !important;
+  border-top-color:rgba(255,255,255,.07) !important;
 }
 html.light-theme aside button[style*="background:none"],
 html.light-theme aside button[style*="background:\"none\""]{
-  color:#64748b !important;
+  color:#94a3b8 !important;
 }
 /* LIVE / SETUP badges */
 html.light-theme aside span[style*="background"]{ font-weight:700 !important; }
 
 /* ═══════════════════════════════════════════════════════════════════
-   TOPBAR — matching dark navy sidebar
+   TOPBAR — charcoal, matches sidebar
 ═══════════════════════════════════════════════════════════════════ */
 html.light-theme header.professional-surface{
-  background:#1e293b !important;
-  border-bottom:1px solid #334155 !important;
-  box-shadow:0 4px 20px rgba(0,0,0,.12) !important;
+  background:linear-gradient(180deg, #212128 0%, #1e1e24 100%) !important;
+  border-bottom:1px solid #2e2e3a !important;
+  box-shadow:0 4px 20px rgba(0,0,0,.22) !important;
 }
 /* All topbar text — white/light */
 html.light-theme header.professional-surface *{ color:#ecf0f1 !important; }
@@ -564,12 +587,12 @@ html.light-theme header.professional-surface button{
   background:rgba(0,0,0,.22) !important;
   border-color:rgba(255,255,255,.16) !important;
 }
-/* Theme toggle — indigo accent */
+/* Theme toggle — green accent */
 html.light-theme header.professional-surface button[style*="border-radius:8"],
 html.light-theme header.professional-surface button[style*="borderRadius:8"]{
-  background:rgba(79,70,229,.25) !important;
-  color:#818cf8 !important;
-  border-color:rgba(79,70,229,.40) !important;
+  background:rgba(16,185,129,.22) !important;
+  color:#34d399 !important;
+  border-color:rgba(52,211,153,.38) !important;
 }
 /* Settings / Power buttons */
 html.light-theme header.professional-surface button[style*="transparent"]{
@@ -579,7 +602,7 @@ html.light-theme header.professional-surface button[style*="transparent"]{
 /* All status text — inherit vivid colours (green/red/amber) */
 html.light-theme header.professional-surface span{ color:inherit !important; }
 /* Clock chip */
-html.light-theme header.professional-surface div[style*="050d18"]{
+html.light-theme header.professional-surface div[style*="25252d"]{
   background:rgba(0,0,0,.35) !important;
   border-color:rgba(0,238,255,.3) !important;
 }
@@ -687,25 +710,25 @@ html.light-theme thead th{
   font-weight:700 !important;
   background:transparent !important;
 }
-/* First column header — indigo left accent */
+/* First column header — green left accent */
 html.light-theme thead th:first-child{
-  border-left:3px solid #4f46e5 !important;
+  border-left:3px solid #059669 !important;
 }
 /* Zebra rows */
 html.light-theme tbody tr:nth-child(odd)  { background:#ffffff !important; }
 html.light-theme tbody tr:nth-child(even) { background:#f8fafc !important; }
 html.light-theme tbody tr:hover{
-  background:#eef2ff !important;
-  box-shadow:inset 3px 0 0 #4f46e5 !important;
+  background:#ecfdf5 !important;
+  box-shadow:inset 3px 0 0 #059669 !important;
 }
-/* First column cell — indigo border placeholder */
+/* First column cell — green border placeholder */
 html.light-theme tbody td:first-child{
   border-left:3px solid transparent !important;
   color:#1a252f !important;
   font-weight:600 !important;
 }
 html.light-theme tbody tr:hover td:first-child{
-  border-left-color:#4f46e5 !important;
+  border-left-color:#059669 !important;
 }
 html.light-theme tbody td{ color:#2c3e50 !important; font-size:13.5px !important; }
 /* Table outer border */
@@ -901,84 +924,130 @@ html.light-theme .recharts-default-tooltip{
 html.light-theme .recharts-default-tooltip .recharts-tooltip-label{ color:#1a252f !important; }
 html.light-theme .recharts-default-tooltip .recharts-tooltip-item{ color:#2c3e50 !important; }
 
+
 /* ═══════════════════════════════════════════════════════════════════
-   LOGIN PAGE — Light Theme Enhancements
+   LOGIN PAGE — Light Theme Right Panel
 ═══════════════════════════════════════════════════════════════════ */
-/* Login page background - ensure clean light gradient */
-html.light-theme .login-stage{ background:linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e8ecf4 100%) !important; }
-/* Signin card - enhanced visibility */
-html.light-theme .signin-card{
-  background:rgba(255,255,255,.95) !important;
+/* Right panel background — clean light gradient */
+html.light-theme .login-stage{ background:linear-gradient(135deg,#f0f4f8 0%,#e8eef5 100%) !important; }
+/* Hide dark decorative elements on left panel in light theme */
+html.light-theme .login-aurora{ opacity:.25 !important; }
+html.light-theme .login-radar{ opacity:.12 !important; }
+html.light-theme .login-lines{ opacity:.08 !important; }
+html.light-theme .login-orb{ opacity:.15 !important; }
+html.light-theme .login-particle{ opacity:.3 !important; }
+/* Right panel wrapper — solid white elevated panel */
+html.light-theme .login-stage > div:last-child{
+  background:linear-gradient(160deg,#ffffff 0%,#f8fafc 100%) !important;
+  border-left:1px solid #e2e8f0 !important;
+  box-shadow:-8px 0 40px rgba(0,0,0,.08) !important;
+}
+/* All divs inside right panel — override any dark inline backgrounds */
+html.light-theme .login-stage > div:last-child > div div[style*="rgba(10,"],
+html.light-theme .login-stage > div:last-child > div div[style*="rgba(18,"],
+html.light-theme .login-stage > div:last-child > div div[style*="rgba(14,"]{
+  background:rgba(255,255,255,.92) !important;
+  border-color:#cbd5e1 !important;
+  color:#334155 !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.08) !important;
+}
+/* System time chip text */
+html.light-theme .login-stage > div:last-child div[style*="rgba"] span{ color:#0f172a !important; }
+/* Company name & subtitle */
+html.light-theme .login-stage [style*="EXPO CITY DUBAI"]{ color:#0f172a !important; }
+html.light-theme .login-stage [style*="Enterprise Access"]{ color:#475569 !important; }
+/* Signin card — white elevated card (override inline background too) */
+html.light-theme .signin-card,
+html.light-theme .signin-card[style]{
+  background:linear-gradient(180deg,#ffffff,#f8fafc) !important;
   border:1px solid #e2e8f0 !important;
-  box-shadow:0 10px 40px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.08) !important;
+  box-shadow:0 8px 32px rgba(0,0,0,.10),0 2px 8px rgba(0,0,0,.06),inset 0 1px 0 rgba(255,255,255,.9) !important;
 }
 html.light-theme .signin-card::before{
-  background:linear-gradient(120deg, rgba(99,102,241,.15), transparent 28%, transparent 72%, rgba(79,70,229,.12)) !important;
+  background:linear-gradient(120deg,rgba(5,150,105,.08),transparent 30%,transparent 70%,rgba(4,120,87,.06)) !important;
 }
 html.light-theme .signin-card::after{
-  background:linear-gradient(90deg, transparent, rgba(99,102,241,.7), rgba(79,70,229,.8), transparent) !important;
+  background:linear-gradient(90deg,transparent,rgba(5,150,105,.6),rgba(16,185,129,.7),transparent) !important;
 }
-/* Login page titles and text */
-html.light-theme .fut-title{
-  background:linear-gradient(90deg, #0f172a 0%, #334155 35%, #475569 100%) !important;
-  -webkit-background-clip:text !important;
-  background-clip:text !important;
+/* Card header border */
+html.light-theme .signin-card form > div:first-child{ border-bottom-color:#e2e8f0 !important; }
+/* Card icon chip */
+html.light-theme .signin-card form > div:first-child > div > div:first-child{
+  background:rgba(5,150,105,.10) !important;
+  border-color:rgba(5,150,105,.25) !important;
 }
-html.light-theme .login-stage h1,
-html.light-theme .login-stage h2,
-html.light-theme .login-stage h3{ color:#0f172a !important; }
-html.light-theme .login-stage p,
-html.light-theme .login-stage span,
-html.light-theme .login-stage label{ color:#334155 !important; }
-html.light-theme .login-stage .ui-label{ color:#475569 !important; }
-/* Input fields - override browser autofill yellow */
-html.light-theme .login-stage input:-webkit-autofill,
-html.light-theme .login-stage input:-webkit-autofill:hover,
-html.light-theme .login-stage input:-webkit-autofill:focus{
+/* "Account Login" title */
+html.light-theme .signin-card [style*="Account Login"]{ color:#0f172a !important; }
+html.light-theme .signin-card [style*="authorized credentials"]{ color:#64748b !important; }
+/* Field labels */
+html.light-theme .signin-card label[style]{ color:#475569 !important; }
+/* Inputs inside signin card */
+html.light-theme .signin-card input[type="text"],
+html.light-theme .signin-card input[type="password"],
+html.light-theme .signin-card input:not([type="checkbox"]){
+  background:#ffffff !important;
+  border-color:#cbd5e1 !important;
+  color:#0f172a !important;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.04) !important;
+}
+html.light-theme .signin-card input::placeholder{ color:#94a3b8 !important; }
+html.light-theme .signin-card input:focus{
+  border-color:#059669 !important;
+  box-shadow:0 0 0 3px rgba(5,150,105,.15),inset 0 1px 2px rgba(0,0,0,.04) !important;
+}
+/* Autofill override */
+html.light-theme .signin-card input:-webkit-autofill,
+html.light-theme .signin-card input:-webkit-autofill:hover,
+html.light-theme .signin-card input:-webkit-autofill:focus{
   -webkit-box-shadow:0 0 0 30px #ffffff inset !important;
   -webkit-text-fill-color:#0f172a !important;
-  transition:background-color 5000s ease-in-out 0s !important;
 }
-html.light-theme .login-stage input{
-  background:#ffffff !important;
-  border:1px solid #cbd5e1 !important;
-  color:#0f172a !important;
-  box-shadow:inset 0 1px 2px rgba(0,0,0,.05),0 1px 0 rgba(255,255,255,.5) !important;
-}
-html.light-theme .login-stage input:focus{
-  border-color:#6366f1 !important;
-  box-shadow:0 0 0 3px rgba(99,102,241,.15),inset 0 1px 2px rgba(0,0,0,.05) !important;
-}
-html.light-theme .login-stage input::placeholder{ color:#94a3b8 !important; }
-/* Login buttons - ensure visibility */
-html.light-theme .login-stage button{
+/* Show/Remember checkboxes labels */
+html.light-theme .signin-card label{ color:#475569 !important; }
+/* Sign In button — green */
+html.light-theme .signin-card button[type="submit"]{
+  background:linear-gradient(180deg,#059669,#047857) !important;
   color:#ffffff !important;
-  font-weight:600 !important;
+  border-color:#047857 !important;
+  box-shadow:0 4px 14px rgba(5,150,105,.35) !important;
 }
-html.light-theme .login-stage button[style*="transparent"]{
-  background:#f1f5f9 !important;
-  color:#334155 !important;
-  border:1px solid #cbd5e1 !important;
+/* HUD corner brackets inside card — green */
+html.light-theme .signin-card-hud::before,
+html.light-theme .signin-card-hud::after{ border-color:rgba(5,150,105,.40) !important; }
+/* fut-strip */
+html.light-theme .fut-strip{
+  background:linear-gradient(90deg,rgba(5,150,105,.08),rgba(16,185,129,.05)) !important;
+  border-color:rgba(5,150,105,.20) !important;
 }
-html.light-theme .login-stage button[style*="transparent"]:hover{
-  background:#e2e8f0 !important;
-  color:#0f172a !important;
+html.light-theme .fut-strip .t{ color:#059669 !important; }
+html.light-theme .fut-strip .fut-bars span{ background:#059669 !important; opacity:.6 !important; }
+/* KPI boxes */
+html.light-theme .fut-kpi{
+  background:linear-gradient(180deg,#ffffff,#f8fafc) !important;
+  border-color:#e2e8f0 !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.06) !important;
 }
-/* Bottom action buttons container */
-html.light-theme .login-stage .fut-kpi{ background:rgba(255,255,255,.8) !important; }
-html.light-theme .login-stage .fut-kpi .v{ color:#0f172a !important; }
-html.light-theme .login-stage .fut-kpi .l{ color:#475569 !important; }
-/* Login page decorative elements - toned down for light theme */
-html.light-theme .login-aurora{ opacity:.6 !important; }
-html.light-theme .login-orb{ opacity:.7 !important; }
+html.light-theme .fut-kpi .v{ color:#0f172a !important; }
+html.light-theme .fut-kpi .l{ color:#64748b !important; }
+/* fr-chips (FR Engine / Liveness / Mode) on left panel */
+html.light-theme .fr-chip{ background:rgba(255,255,255,.72) !important; border-color:rgba(5,150,105,.30) !important; color:#334155 !important; }
+html.light-theme .fr-chip b{ color:#0f172a !important; }
+/* fut-title gradient — readable on light bg */
+html.light-theme .fut-title{
+  background:linear-gradient(90deg,#0f172a 0%,#059669 50%,#047857 100%) !important;
+  -webkit-background-clip:text !important;background-clip:text !important;color:transparent !important;
+}
+/* Copyright text */
+html.light-theme .login-stage [style*="All rights reserved"]{ color:#94a3b8 !important; }
+/* Corner HUD brackets on left panel — keep subtle */
 html.light-theme .login-corner-hud::before,
-html.light-theme .login-corner-hud::after{ border-color:rgba(99,102,241,.35) !important; }
-html.light-theme .login-corner-dot{ background:rgba(99,102,241,.5) !important; box-shadow:0 0 10px rgba(99,102,241,.35) !important; }
+html.light-theme .login-corner-hud::after{ border-color:rgba(5,150,105,.30) !important; }
+html.light-theme .login-corner-dot{ background:rgba(5,150,105,.55) !important; box-shadow:0 0 8px rgba(5,150,105,.35) !important; }
 
 /* ═══════════════════════════════════════════════════════════════════
    SCADA DECORATIVE ELEMENTS — hide in light theme
 ═══════════════════════════════════════════════════════════════════ */
-html.light-theme .scada-corner-bracket{ border-color:#6366f1 !important; opacity:.35 !important; }
+html.light-theme .scada-corner-bracket{ border-color:#1abc9c !important; opacity:.35 !important; }
 html.light-theme .scada-led{ box-shadow:none !important; }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -3084,9 +3153,9 @@ function Sidebar({ page, onNav, user, open, onToggle, alertCount=0 }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   return (
-    <aside className="professional-surface" style={{ width:open?312:72,height:"100vh",minHeight:0,background:`linear-gradient(180deg, rgba(8,22,38,.98) 0%, rgba(6,13,24,.98) 100%)`,display:"flex",flexDirection:"column",flexShrink:0,transition:"width .22s cubic-bezier(.4,0,.2,1)",overflowY:"hidden",overflowX:"hidden",position:"relative",zIndex:10,boxShadow:`10px 0 34px rgba(0,0,0,.34), inset -1px 0 0 ${TH.cyan}22` }}>
+    <aside className="professional-surface" style={{ width:open?312:72,height:"100vh",minHeight:0,background:`linear-gradient(180deg, #1e1e24 0%, #1a1a1f 100%)`,display:"flex",flexDirection:"column",flexShrink:0,transition:"width .22s cubic-bezier(.4,0,.2,1)",overflowY:"hidden",overflowX:"hidden",position:"relative",zIndex:10,boxShadow:`10px 0 34px rgba(0,0,0,.34), inset -1px 0 0 ${TH.cyan}22` }}>
       {/* Logo */}
-      <div style={{ position:"sticky",top:0,zIndex:3,padding:open?"12px 14px":"10px 8px",display:"flex",alignItems:"center",justifyContent:open?"flex-start":"center",gap:open?10:0,minHeight:open?68:62,flexShrink:0,background:`linear-gradient(180deg, #05101e, #0a1726)`,borderBottom:`1px solid ${TH.cyan}33`,boxShadow:`0 1px 12px ${TH.cyan}22` }}>
+      <div style={{ position:"sticky",top:0,zIndex:3,padding:open?"12px 14px":"10px 8px",display:"flex",alignItems:"center",justifyContent:open?"flex-start":"center",gap:open?10:0,minHeight:open?68:62,flexShrink:0,background:`linear-gradient(180deg, #212128, #1e1e24)`,borderBottom:`1px solid ${TH.cyan}33`,boxShadow:`0 1px 12px ${TH.cyan}22` }}>
         <div style={{ width:logoWrap,height:logoWrap,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,background:"radial-gradient(circle at 35% 30%, rgba(255,255,255,.14), rgba(255,255,255,.02) 58%)" }}>
           <img
             src={sidebarLogo}
@@ -3148,7 +3217,7 @@ function Sidebar({ page, onNav, user, open, onToggle, alertCount=0 }) {
       {/* User (always visible, including superadmin in collapsed mode) */}
       {user&&<div
         title={`${user.name||user.username} (${user.role||"user"})`}
-        style={{ padding:open?"9px 14px":"8px 0",borderTop:`1px solid ${TH.border}`,display:"flex",gap:open?10:0,alignItems:"center",justifyContent:open?"flex-start":"center",flexShrink:0,background:"linear-gradient(180deg, rgba(21,36,60,.92), rgba(18,31,52,.94))" }}>
+        style={{ padding:open?"9px 14px":"8px 0",borderTop:`1px solid ${TH.border}`,display:"flex",gap:open?10:0,alignItems:"center",justifyContent:open?"flex-start":"center",flexShrink:0,background:"linear-gradient(180deg, #212128, #1a1a1f)" }}>
         <Avatar name={user.name||user.username} size={open?30:28} color={TH.blue}/>
         {open
           ? <div style={{ flex:1,minWidth:0 }}>
@@ -3224,8 +3293,26 @@ function TopBar({ page, user, onLogout, online, onNav, onBack, canGoBack, onThem
     clearToken(); onLogout(); show("Signed out","info");
   };
 
+  const [showChgPwd, setShowChgPwd] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ current:"", next:"", confirm:"" });
+  const [pwdBusy, setPwdBusy] = useState(false);
+  const doChangePassword = async () => {
+    if (!pwdForm.current) { show("Enter current password","error"); return; }
+    if (pwdForm.next.length < 8) { show("New password must be at least 8 characters","error"); return; }
+    if (pwdForm.next !== pwdForm.confirm) { show("Passwords do not match","error"); return; }
+    setPwdBusy(true);
+    try {
+      const res = await api.changePassword({ currentPassword: pwdForm.current, newPassword: pwdForm.next });
+      show("Password changed successfully" + (res.note ? " — " + res.note : ""), "success");
+      setShowChgPwd(false);
+      setPwdForm({ current:"", next:"", confirm:"" });
+    } catch(e) { show(e.message,"error"); }
+    finally { setPwdBusy(false); }
+  };
+
   return (
-    <header className="professional-surface" style={{ height:64,background:`linear-gradient(180deg, rgba(8,22,38,.92) 0%, rgba(7,17,31,.88) 100%)`,borderBottom:`1px solid ${TH.cyan}28`,display:"flex",alignItems:"center",padding:"0 24px",gap:16,flexShrink:0,boxShadow:`0 10px 28px rgba(0,0,0,.22), 0 1px 0 ${TH.cyan}11 inset`,position:"relative",zIndex:5 }}>
+    <>
+    <header className="professional-surface" style={{ height:64,background:`linear-gradient(180deg, #212128 0%, #1e1e24 100%)`,borderBottom:`1px solid ${TH.cyan}28`,display:"flex",alignItems:"center",padding:"0 24px",gap:16,flexShrink:0,boxShadow:`0 10px 28px rgba(0,0,0,.22), 0 1px 0 ${TH.cyan}11 inset`,position:"relative",zIndex:5 }}>
       <div style={{ display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0 }}>
         <Btn v="ghost" sz="sm" onClick={onBack} disabled={!canGoBack}>← Back</Btn>
         <div style={{ display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0 }}>
@@ -3291,7 +3378,7 @@ function TopBar({ page, user, onLogout, online, onNav, onBack, canGoBack, onThem
         <div style={{
           display:"flex",alignItems:"center",gap:8,
           padding:"5px 12px",borderRadius:3,
-          background:`linear-gradient(180deg, #050d18, #0a1726)`,
+          background:`linear-gradient(180deg, #25252d, #1e1e24)`,
           border:`1px solid ${TH.cyan}55`,
           boxShadow:`inset 0 1px 0 rgba(255,255,255,.04), inset 0 0 12px ${TH.cyan}11`,
         }}>
@@ -3326,6 +3413,14 @@ function TopBar({ page, user, onLogout, online, onNav, onBack, canGoBack, onThem
         {/* Role */}
         <Badge color="blue">{user?.role}</Badge>
 
+        {/* Change Password — available to all */}
+        <button onClick={()=>{ setPwdForm({current:"",next:"",confirm:""}); setShowChgPwd(true); }} title="Change Password"
+          style={{ background:"none",border:"none",cursor:"pointer",color:TH.muted,fontSize:13,padding:"5px 10px",borderRadius:7,transition:"all .13s",fontWeight:700 }}
+          onMouseEnter={e=>{ e.currentTarget.style.background=TH.blueDim; e.currentTarget.style.color=TH.blue; }}
+          onMouseLeave={e=>{ e.currentTarget.style.background="none"; e.currentTarget.style.color=TH.muted; }}>
+          🔑 Password
+        </button>
+
         {/* Superadmin settings */}
         {user?.role==="superadmin"&&(
           <button onClick={()=>onNav?.("settings")} title="Settings"
@@ -3344,6 +3439,41 @@ function TopBar({ page, user, onLogout, online, onNav, onBack, canGoBack, onThem
         </button>
       </div>
     </header>
+
+    {showChgPwd&&(
+      <Modal title="Change Password" onClose={()=>setShowChgPwd(false)} width={420}
+        footer={
+          <div style={{ display:"flex",gap:8,justifyContent:"flex-end" }}>
+            <Btn v="ghost" onClick={()=>setShowChgPwd(false)}>Cancel</Btn>
+            <Btn onClick={doChangePassword} loading={pwdBusy} disabled={!pwdForm.current||!pwdForm.next||!pwdForm.confirm}>
+              Change Password
+            </Btn>
+          </div>
+        }>
+        <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+          <GlassCard color={TH.blue} style={{ padding:"10px 14px" }}>
+            <div style={{ fontSize:12,color:TH.blue,fontWeight:600 }}>
+              Changing password for: <span style={{ color:TH.textHi }}>{user?.username || user?.name}</span>
+            </div>
+          </GlassCard>
+          <Field label="Current Password" required>
+            <Input value={pwdForm.current} onChange={e=>setPwdForm(p=>({...p,current:e.target.value}))} type="password" placeholder="Your current password"/>
+          </Field>
+          <Field label="New Password" required hint="Minimum 8 characters">
+            <Input value={pwdForm.next} onChange={e=>setPwdForm(p=>({...p,next:e.target.value}))} type="password" placeholder="New password"/>
+          </Field>
+          <Field label="Confirm New Password" required>
+            <Input value={pwdForm.confirm} onChange={e=>setPwdForm(p=>({...p,confirm:e.target.value}))} type="password" placeholder="Repeat new password" onEnter={doChangePassword}/>
+          </Field>
+          {user?.role==="superadmin"&&(
+            <div style={{ fontSize:11,color:TH.amber,lineHeight:1.6,padding:"8px 10px",background:TH.amberDim,borderRadius:8,border:`1px solid ${TH.amber}33` }}>
+              ⚠ Superadmin password change is in-memory only until container restart. Update <code>ADMIN_PASS</code> in your <code>.env</code> file for persistence.
+            </div>
+          )}
+        </div>
+      </Modal>
+    )}
+    </>
   );
 }
 

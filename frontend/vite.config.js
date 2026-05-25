@@ -5,7 +5,20 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react()],
   build: {
-    chunkSizeWarningLimit: 1200
+    chunkSizeWarningLimit: 1200,
+    sourcemap: false,
+    minify: "esbuild",
+    esbuildOptions: {
+      drop: ["console", "debugger"],
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          recharts: ["recharts"],
+        },
+      },
+    },
   },
   server: {
     host: "0.0.0.0",

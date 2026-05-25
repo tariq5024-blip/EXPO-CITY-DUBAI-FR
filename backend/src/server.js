@@ -23,6 +23,17 @@ import { WebSocketServer } from "ws";
 const app = express();
 const { EJSON } = BSON;
 
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
 /** Live dashboard / FR Monitor — browser connects with ?token=JWT (same secret as REST Bearer). */
 const wsClients = new Set();
 
@@ -2518,7 +2529,8 @@ app.get("/api/metrics", async (_req, res) => {
 app.post("/api/auth/login", rateLimit(RATE_LIMIT_AUTH_MAX, RATE_LIMIT_WINDOW_MS), async (req, res) => {
   const username = String(req.body?.username || req.body?.email || "").trim().toLowerCase();
   const password = req.body?.password || "";
-  if (username === String(ADMIN_USER).toLowerCase() && password === ADMIN_PASS) {
+  const effectiveAdminPass = global._runtimeAdminPass || ADMIN_PASS;
+  if (username === String(ADMIN_USER).toLowerCase() && password === effectiveAdminPass) {
     const user = { id: "admin-1", name: "Administrator", username: ADMIN_USER, role: "superadmin" };
     const token = jwt.sign({ user }, JWT_SECRET, { expiresIn: "12h" });
     return res.json({ token, user });
@@ -2553,6 +2565,39 @@ app.post("/api/auth/login", rateLimit(RATE_LIMIT_AUTH_MAX, RATE_LIMIT_WINDOW_MS)
 
 app.get("/api/auth/me", (req, res) => res.json(req.user?.user || req.user));
 app.post("/api/auth/logout", (_req, res) => res.json({ ok: true }));
+
+app.post("/api/auth/change-password", auth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  const callerUsername = String(req.user?.user?.username || req.user?.username || "").toLowerCase();
+  if (!currentPassword || !newPassword)
+    return res.status(400).json({ error: "currentPassword and newPassword are required" });
+  if (String(newPassword).length < 8)
+    return res.status(400).json({ error: "New password must be at least 8 characters" });
+  if (currentPassword === newPassword)
+    return res.status(400).json({ error: "New password must differ from the current password" });
+
+  // Hardcoded superadmin (env-based)
+  if (callerUsername === String(ADMIN_USER).toLowerCase()) {
+    const effectiveAdminPass = global._runtimeAdminPass || ADMIN_PASS;
+    if (currentPassword !== effectiveAdminPass)
+      return res.status(401).json({ error: "Current password is incorrect" });
+    // Update in-memory value so the new password works immediately without restart
+    // Note: this survives until container restart; set ADMIN_PASS in .env for persistence
+    global._runtimeAdminPass = newPassword;
+    return res.json({ ok: true, note: "Password updated for this session. Update ADMIN_PASS in .env for persistence across restarts." });
+  }
+
+  // DB account
+  const acc = await collection("accounts").findOne({ username: callerUsername });
+  if (!acc) return res.status(404).json({ error: "Account not found" });
+  if (acc.password !== currentPassword)
+    return res.status(401).json({ error: "Current password is incorrect" });
+  await collection("accounts").updateOne(
+    { username: callerUsername },
+    { $set: { password: newPassword, updatedAt: new Date() } }
+  );
+  return res.json({ ok: true });
+});
 
 app.get("/api/employees", async (req, res) => {
   const { skip, limit } = parsePagination(req.query);
@@ -6451,7 +6496,8 @@ app.use((err, _req, res, _next) => {
   if (err?.type === "entity.parse.failed" || err?.status === 400) {
     return res.status(400).json({ error: "Invalid JSON body" });
   }
-  res.status(500).json({ error: "Internal server error" });
+  const IS_PROD = process.env.NODE_ENV === "production";
+  res.status(500).json({ error: "Internal server error", ...(IS_PROD ? {} : { detail: err?.message }) });
 });
 
 let shuttingDown = false;
