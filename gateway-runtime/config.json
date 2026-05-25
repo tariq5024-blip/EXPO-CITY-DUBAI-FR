@@ -1,0 +1,52 @@
+{
+  "cert": {
+    "dir": "cert",
+    "ca_cert": "ca.crt",
+    "ca_key": "ca_key.pem",
+    "server_cert": "server.crt",
+    "server_key": "server_key.pem",
+    "master_ca_cert": "master_ca.crt",
+    "gateway_cert": "gateway_gateway1.crt",
+    "gateway_key": "gateway_gateway1_key.pem",
+    "self_signed": true
+  },
+
+  "device_server": {
+    "ip": "",
+    "port": 51211,
+    "ssl_port": 51212,
+    "reconnect_interval": 30000,
+    "detect_network_interval": 10000
+  },
+
+  "timeout": {
+    "cmd": 10000,
+    "long_cmd": 20000,
+    "upgrade_cmd": 30000,
+    "input_cmd": 20000,
+    "face_input_cmd": 60000,
+    "keep_alive": 32000
+  },
+
+  "rpc_server": {
+    "ip": "",
+    "port": 4100,
+    "max_recv_size": 75497472
+  },
+
+  "master_gateway": {
+    "use": false,
+    "ip": "",
+    "port": 4010
+  },
+
+  "log": {
+    "level": 3,
+    "use_file": true,
+    "filename": "logs/gateway.log",
+    "max_size_MB": 100,
+    "max_days": 30,
+    "max_backups": 10,
+    "append_mode": true
+  }
+}

@@ -6,3 +6,20 @@ frontend/dist/
 # Visitor QR PNG + contact.json (generated at runtime; keep folder via .gitkeep)
 data/visitor-qr-codes/**
 !data/visitor-qr-codes/.gitkeep
+
+# Suprema device gateway — binary and private key material (not committed to git)
+# Re-install: extract device_gateway_linux_x64 from the .7z archive in Downloads
+# then run: python3 gateway-runtime/patch-eula.py  and  bash gateway-runtime/renew-certs.sh
+gateway-runtime/device_gateway_linux_x64
+gateway-runtime/EULA.txt
+gateway-runtime/logs/
+gateway-runtime/cert/ca_key.pem
+gateway-runtime/cert/server.crt
+gateway-runtime/cert/server_key.pem
+gateway-runtime/cert/server.csr
+# Keep ca.crt tracked so sidecar always has it; keep scripts and config tracked
+!gateway-runtime/cert/ca.crt
+!gateway-runtime/cert/README.md
+!gateway-runtime/config.json
+!gateway-runtime/renew-certs.sh
+!gateway-runtime/check-gateway.sh

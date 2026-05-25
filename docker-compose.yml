@@ -19,7 +19,7 @@ services:
     container_name: expo-fr-ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "11435:11434"
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:

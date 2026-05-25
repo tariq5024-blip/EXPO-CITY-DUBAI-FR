@@ -11,6 +11,7 @@ RUN npm install
 
 # Copy source and pre-build for production preview mode
 COPY . .
+RUN npm run build
 
 
 EXPOSE 5173

@@ -159,7 +159,7 @@ const ACCEPT_FILTER_REFRESH_MS = Math.max(30000, Number(process.env.ACCEPT_FILTE
 /** Intelligent self-healing loop for sidecar/gateway/device event flow. */
 const SELF_HEALING_ENABLED = String(process.env.SELF_HEALING_ENABLED ?? "true").toLowerCase() === "true";
 const SELF_HEALING_TICK_MS = Math.max(5000, Number(process.env.SELF_HEALING_TICK_MS || 15000));
-const SELF_HEALING_FAIL_THRESHOLD = Math.max(1, Number(process.env.SELF_HEALING_FAIL_THRESHOLD || 2));
+const SELF_HEALING_FAIL_THRESHOLD = Math.max(1, Number(process.env.SELF_HEALING_FAIL_THRESHOLD || 3));
 const SELF_HEALING_COOLDOWN_MS = Math.max(5000, Number(process.env.SELF_HEALING_COOLDOWN_MS || 20000));
 /** Watchdog: detect stalled loops and trigger recovery immediately. */
 const WATCHDOG_ENABLED = String(process.env.WATCHDOG_ENABLED ?? "true").toLowerCase() === "true";
@@ -1026,7 +1026,7 @@ async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 3500) {
 async function getGsdkStatus() {
   if (GSDK_SIDECAR_URL) {
     try {
-      const { payload } = await fetchJsonWithTimeout(`${GSDK_SIDECAR_URL}/health`, {}, 2500);
+      const { payload } = await fetchJsonWithTimeout(`${GSDK_SIDECAR_URL}/health`, {}, 5000);
       if (payload?.gsdk?.loaded) {
         return {
           installed: true,
@@ -4101,7 +4101,7 @@ app.get("/api/gsdk/diagnostics", async (_req, res) => {
   let sidecarHealth = null;
   if (GSDK_SIDECAR_URL) {
     try {
-      const { response, payload } = await fetchJsonWithTimeout(`${GSDK_SIDECAR_URL}/health`, { method: "GET" }, 4000);
+      const { response, payload } = await fetchJsonWithTimeout(`${GSDK_SIDECAR_URL}/health`, { method: "GET" }, 5000);
       sidecarHealth = response.ok ? payload : { http: response.status };
     } catch (e) {
       sidecarHealth = { error: e.message };
@@ -5516,7 +5516,7 @@ async function tickSelfHealing() {
   let sidecarHealthy = false;
   if (GSDK_SIDECAR_URL) {
     try {
-      const { response, payload } = await fetchJsonWithTimeout(`${GSDK_SIDECAR_URL}/health`, { method: "GET" }, 2500);
+      const { response, payload } = await fetchJsonWithTimeout(`${GSDK_SIDECAR_URL}/health`, { method: "GET" }, 5000);
       sidecarHealthy = Boolean(response.ok && payload?.ok);
     } catch {
       sidecarHealthy = false;
