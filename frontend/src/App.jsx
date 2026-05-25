@@ -902,9 +902,83 @@ html.light-theme .recharts-default-tooltip .recharts-tooltip-label{ color:#1a252
 html.light-theme .recharts-default-tooltip .recharts-tooltip-item{ color:#2c3e50 !important; }
 
 /* ═══════════════════════════════════════════════════════════════════
+   LOGIN PAGE — Light Theme Enhancements
+═══════════════════════════════════════════════════════════════════ */
+/* Login page background - ensure clean light gradient */
+html.light-theme .login-stage{ background:linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e8ecf4 100%) !important; }
+/* Signin card - enhanced visibility */
+html.light-theme .signin-card{
+  background:rgba(255,255,255,.95) !important;
+  border:1px solid #e2e8f0 !important;
+  box-shadow:0 10px 40px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.08) !important;
+}
+html.light-theme .signin-card::before{
+  background:linear-gradient(120deg, rgba(99,102,241,.15), transparent 28%, transparent 72%, rgba(79,70,229,.12)) !important;
+}
+html.light-theme .signin-card::after{
+  background:linear-gradient(90deg, transparent, rgba(99,102,241,.7), rgba(79,70,229,.8), transparent) !important;
+}
+/* Login page titles and text */
+html.light-theme .fut-title{
+  background:linear-gradient(90deg, #0f172a 0%, #334155 35%, #475569 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+}
+html.light-theme .login-stage h1,
+html.light-theme .login-stage h2,
+html.light-theme .login-stage h3{ color:#0f172a !important; }
+html.light-theme .login-stage p,
+html.light-theme .login-stage span,
+html.light-theme .login-stage label{ color:#334155 !important; }
+html.light-theme .login-stage .ui-label{ color:#475569 !important; }
+/* Input fields - override browser autofill yellow */
+html.light-theme .login-stage input:-webkit-autofill,
+html.light-theme .login-stage input:-webkit-autofill:hover,
+html.light-theme .login-stage input:-webkit-autofill:focus{
+  -webkit-box-shadow:0 0 0 30px #ffffff inset !important;
+  -webkit-text-fill-color:#0f172a !important;
+  transition:background-color 5000s ease-in-out 0s !important;
+}
+html.light-theme .login-stage input{
+  background:#ffffff !important;
+  border:1px solid #cbd5e1 !important;
+  color:#0f172a !important;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.05),0 1px 0 rgba(255,255,255,.5) !important;
+}
+html.light-theme .login-stage input:focus{
+  border-color:#6366f1 !important;
+  box-shadow:0 0 0 3px rgba(99,102,241,.15),inset 0 1px 2px rgba(0,0,0,.05) !important;
+}
+html.light-theme .login-stage input::placeholder{ color:#94a3b8 !important; }
+/* Login buttons - ensure visibility */
+html.light-theme .login-stage button{
+  color:#ffffff !important;
+  font-weight:600 !important;
+}
+html.light-theme .login-stage button[style*="transparent"]{
+  background:#f1f5f9 !important;
+  color:#334155 !important;
+  border:1px solid #cbd5e1 !important;
+}
+html.light-theme .login-stage button[style*="transparent"]:hover{
+  background:#e2e8f0 !important;
+  color:#0f172a !important;
+}
+/* Bottom action buttons container */
+html.light-theme .login-stage .fut-kpi{ background:rgba(255,255,255,.8) !important; }
+html.light-theme .login-stage .fut-kpi .v{ color:#0f172a !important; }
+html.light-theme .login-stage .fut-kpi .l{ color:#475569 !important; }
+/* Login page decorative elements - toned down for light theme */
+html.light-theme .login-aurora{ opacity:.6 !important; }
+html.light-theme .login-orb{ opacity:.7 !important; }
+html.light-theme .login-corner-hud::before,
+html.light-theme .login-corner-hud::after{ border-color:rgba(99,102,241,.35) !important; }
+html.light-theme .login-corner-dot{ background:rgba(99,102,241,.5) !important; box-shadow:0 0 10px rgba(99,102,241,.35) !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
    SCADA DECORATIVE ELEMENTS — hide in light theme
 ═══════════════════════════════════════════════════════════════════ */
-html.light-theme .scada-corner-bracket{ border-color:#1abc9c !important; opacity:.35 !important; }
+html.light-theme .scada-corner-bracket{ border-color:#6366f1 !important; opacity:.35 !important; }
 html.light-theme .scada-led{ box-shadow:none !important; }
 
 /* ═══════════════════════════════════════════════════════════════════
