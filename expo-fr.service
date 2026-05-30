@@ -1,0 +1,35 @@
+[Unit]
+Description=Expo-City Dubai FR - Face Recognition System
+Documentation=https://github.com/tariq5024-blip/EXPO-CITY-DUBAI-FR
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/expo-fr
+
+# Load environment
+Environment="DOCKER_COMPOSE_VERSION=2"
+
+# Start services
+ExecStartPre=-/usr/bin/docker compose down --remove-orphans 2>/dev/null
+ExecStartPre=-/usr/bin/docker compose pull 2>/dev/null
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+
+# Stop services
+ExecStop=/usr/bin/docker compose down
+
+# Reload
+ExecReload=/usr/bin/docker compose up -d --remove-orphans
+
+# Health check
+ExecStartPost=/bin/bash -c 'for i in {1..30}; do curl -s http://localhost:4000/api/ready && exit 0 || sleep 2; done; exit 1'
+
+# Timeouts
+TimeoutStartSec=5min
+TimeoutStopSec=60s
+
+[Install]
+WantedBy=multi-user.target

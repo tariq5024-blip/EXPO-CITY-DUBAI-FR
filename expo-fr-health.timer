@@ -1,0 +1,9 @@
+[Unit]
+Description=Expo-City Dubai FR Health Monitor Timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=Expo-City Dubai FR Health Monitor
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/expo-fr/health-monitor.sh
+User=root
+StandardOutput=append:/var/log/expo-fr-health.log
+StandardError=append:/var/log/expo-fr-health.log
