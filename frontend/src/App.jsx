@@ -2383,7 +2383,7 @@ function Badge({ color = "gray", children, dot, sm }) {
       border:`1px solid ${fg}60`,
       fontFamily:"'JetBrains Mono','Roboto Mono',monospace",
       boxShadow:`inset 0 1px 0 ${fg}15, 0 1px 2px rgba(0,0,0,.2)`,
-    }}
+    }}>
       {dot && (
         <span className="scada-led" style={{
           width:6,height:6,borderRadius:"50%",
