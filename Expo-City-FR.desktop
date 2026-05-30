@@ -1,13 +1,13 @@
 [Desktop Entry]
 Name=Expo-City Dubai FR
 Comment=Face Recognition Access Control System
-Exec=/opt/expo-fr/expo-launcher.sh
+Exec=/home/test/EXPO-CITY-DUBAI-FR/expo-launcher-local.sh
 Type=Application
 Terminal=true
-Icon=/opt/expo-fr/icon.png
+Icon=/home/test/EXPO-CITY-DUBAI-FR/icon.png
 Categories=System;Security;
 StartupNotify=true
 StartupWMClass=Expo-City-FR
 Keywords=face;recognition;access;control;suprema;
 Name[en]=Expo-City Dubai FR
-Name[ar]=إكسبو سيتي دبي FR
+Path=/home/test/EXPO-CITY-DUBAI-FR
