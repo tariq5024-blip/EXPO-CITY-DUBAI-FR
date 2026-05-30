@@ -47,6 +47,13 @@ services:
       - GSDK_USE_SSL=${GSDK_USE_SSL:-false}
       - GSDK_DEVICE_PORT=${GSDK_DEVICE_PORT:-51211}
       - VISITOR_QR_STORAGE_DIR=/app/data/visitor-qr-codes
+      # Device Sync Queue - Critical for offline device handling
+      - DEVICE_SYNC_QUEUE_ENABLED=${DEVICE_SYNC_QUEUE_ENABLED:-true}
+      - DEVICE_SYNC_UNLIMITED_RETENTION=${DEVICE_SYNC_UNLIMITED_RETENTION:-true}
+      - DEVICE_SYNC_MAX_RETRY_DELAY_MS=${DEVICE_SYNC_MAX_RETRY_DELAY_MS:-3600000}
+      # Visitor Device Sync - NEW
+      - DEVICE_REVOKE_ON_VISITOR_REMOVE=${DEVICE_REVOKE_ON_VISITOR_REMOVE:-true}
+      - VISITOR_ENROLLMENT_PUSH_DEVICES=${VISITOR_ENROLLMENT_PUSH_DEVICES:-true}
     volumes:
       - ./data/visitor-qr-codes:/app/data/visitor-qr-codes
     depends_on:

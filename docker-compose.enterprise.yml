@@ -1,0 +1,101 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Dell R440 Enterprise Docker Compose Override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: expo-fr-mongo
+    restart: unless-stopped
+    # Resource limits for R440 - adjust based on your actual specs
+    deploy:
+      resources:
+        limits:
+          memory: 48G
+          cpus: '8'
+        reservations:
+          memory: 16G
+          cpus: '4'
+    ports:
+      - "27017:27017"
+    volumes:
+      # Use fast NVMe/SSD path
+      - /mnt/faststorage/mongo_data:/data/db
+      - ./mongo-scaling.conf:/etc/mongod.conf:ro
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=CHANGE_THIS_PASSWORD
+    command: ["--config", "/etc/mongod.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1 >/dev/null"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4'
+        reservations:
+          memory: 2G
+          cpus: '1'
+    environment:
+      # Override with enterprise config
+      - MONGODB_URI=mongodb://admin:CHANGE_THIS_PASSWORD@mongo:27017/expo-fr?authSource=admin&maxPoolSize=500&minPoolSize=50
+      - NODE_OPTIONS=--max-old-space-size=6144
+
+  gsdk-sidecar:
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: expo-fr-ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: '4'
+        reservations:
+          memory: 4G
+          cpus: '2'
+    ports:
+      - "11435:11434"
+    volumes:
+      - /mnt/faststorage/ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
+
+  # Optional: MongoDB Express for admin (disable in production or secure it)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: expo-fr-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=CHANGE_THIS_PASSWORD
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:CHANGE_THIS_PASSWORD@mongo:27017/?authSource=admin
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=CHANGE_THIS_PASSWORD
+    depends_on:
+      mongo:
+        condition: service_healthy
+    profiles:
+      - admin  # Only start with: docker compose --profile admin up
+
+# Remove named volumes - use bind mounts to fast storage
+volumes: {}

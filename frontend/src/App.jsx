@@ -379,11 +379,11 @@ const GCSS = `
 
 /* ── CSS variable palettes ─────────────────────────────────────────── */
 :root {
-  /* Modern dark theme — deep charcoal gray with purple/violet accents (Teamify style) */
-  --th-bg:#1a1a1f; --th-surface:#212128; --th-card:#25252d; --th-cardHi:#2d2d38;
-  --th-hover:#343440; --th-navBg:#1e1e24;
-  --th-border:#2e2e3a; --th-borderB:#3d3d4d; --th-borderC:#4a4a5c;
-  --th-text:#f1f1f6; --th-muted:#a1a1aa; --th-faint:#71717a; --th-textHi:#ffffff;
+  /* Modern dark theme — enhanced contrast for readability */
+  --th-bg:#121216; --th-surface:#1a1a20; --th-card:#1f1f26; --th-cardHi:#2a2a32;
+  --th-hover:#353540; --th-navBg:#16161a;
+  --th-border:#3d3d4d; --th-borderB:#4a4a5c; --th-borderC:#58586b;
+  --th-text:#f8f8fc; --th-muted:#b8b8c0; --th-faint:#909099; --th-textHi:#ffffff;
   /* Purple/Violet primary accent — matches Teamify dashboard */
   --th-blue:#6366f1; --th-blueHov:#4f46e5;
   --th-blueDim:rgba(99,102,241,.15); --th-blueGlow:rgba(99,102,241,.40);
@@ -394,11 +394,36 @@ const GCSS = `
   --th-cyan:#06b6d4; --th-cyanDim:rgba(6,182,212,.15); --th-cyanGlow:rgba(6,182,212,.40);
   --th-pink:#ec4899; --th-pinkDim:rgba(236,72,153,.15);
   --th-grid:rgba(255,255,255,.04); --th-gridStrong:rgba(255,255,255,.08);
-  --th-shadow:0 4px 20px rgba(0,0,0,.40),0 1px 3px rgba(0,0,0,.30);
-  --th-shadowLg:0 16px 48px rgba(0,0,0,.50),0 4px 16px rgba(0,0,0,.30);
+  --th-shadow:0 4px 24px rgba(0,0,0,.50),0 1px 3px rgba(0,0,0,.40);
+  --th-shadowLg:0 16px 48px rgba(0,0,0,.60),0 4px 16px rgba(0,0,0,.40);
   --th-shadowGlow:0 0 32px rgba(99,102,241,.30),0 8px 32px rgba(0,0,0,.40);
-  --th-insetBevel:inset 0 1px 0 rgba(255,255,255,.06);
+  --th-insetBevel:inset 0 1px 0 rgba(255,255,255,.08);
+  --th-card-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 4px 20px rgba(0,0,0,.40);
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   GLOBAL READABILITY IMPROVEMENTS
+═══════════════════════════════════════════════════════════════════════ */
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body { font-feature-settings: "kern" 1; text-rendering: optimizeLegibility; }
+
+/* Enhanced card visibility */
+[class*="Card"], [class*="card"] {
+  border: 1px solid var(--th-border) !important;
+  box-shadow: var(--th-card-shadow) !important;
+}
+
+/* Improve text contrast on all cards */
+[style*="background:"] {
+  color: var(--th-text);
+}
+
+/* Ensure all interactive elements have clear focus states */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--th-blue) !important;
+  outline-offset: 2px !important;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    LIGHT PROFESSIONAL THEME - Enhanced
    Modern, crisp, high-contrast design with elevated cards
@@ -1063,7 +1088,7 @@ html.light-theme .app-content [style*="color:var(--th-muted)"]{ color:#546e7a !i
 html.light-theme .app-content [style*="color:var(--th-faint)"]{ color:#78909c !important; }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:16px;scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+html{font-size:20px;scroll-behavior:smooth;-webkit-text-size-adjust:100%}
 html,body,#root{height:100%}
 body{
   font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
@@ -1093,14 +1118,14 @@ body{
 ::selection{background:rgba(99,102,241,.35);color:#fff}
 h1,h2,h3,h4{color:var(--th-textHi);font-weight:700;line-height:1.25}
 p{line-height:1.6;color:var(--th-text)}
-.ui-card-title{font-size:1.05rem;font-weight:700;color:var(--th-textHi);letter-spacing:-.02em;margin-bottom:.9rem}
-.ui-label{font-size:.9rem;font-weight:600;color:var(--th-muted);letter-spacing:.02em}
-.ui-value{font-size:.95rem;font-weight:650;color:var(--th-text)}
+.ui-card-title{font-size:1.25rem;font-weight:700;color:var(--th-textHi);letter-spacing:-.02em;margin-bottom:.9rem}
+.ui-label{font-size:1.1rem;font-weight:600;color:var(--th-muted);letter-spacing:.02em}
+.ui-value{font-size:1.15rem;font-weight:650;color:var(--th-text)}
 .ui-mono{font-family:'JetBrains Mono','Roboto Mono',monospace;font-variant-numeric:tabular-nums}
-code,kbd{font-family:'JetBrains Mono',monospace;font-size:.88em;background:var(--th-blueDim);color:var(--th-cyan);padding:.12em .45em;border-radius:4px}
-table{font-size:.94rem}
-th{color:var(--th-muted);font-weight:700;letter-spacing:.04em;font-size:.82rem}
-td{color:var(--th-text);font-size:.93rem}
+code,kbd{font-family:'JetBrains Mono',monospace;font-size:1em;background:var(--th-blueDim);color:var(--th-cyan);padding:.12em .45em;border-radius:4px}
+table{font-size:1.1rem}
+th{color:var(--th-muted);font-weight:700;letter-spacing:.04em;font-size:1rem}
+td{color:var(--th-text);font-size:1.1rem}
 /* SCADA-style top status strip — subtle scanning line at the very top of viewport */
 body::before{
   content:"";
@@ -1135,6 +1160,27 @@ body::before{
   box-shadow:0 0 8px var(--th-cyanGlow);
 }
 ::-webkit-scrollbar-corner{background:transparent}
+
+/* ── Responsive Font Scaling ── */
+@media (max-width: 768px) {
+  html { font-size:18px; }
+  .ui-card-title { font-size:1.15rem; }
+  .ui-label { font-size:1.05rem; }
+  .ui-value { font-size:1.1rem; }
+  table { font-size:1rem; }
+  th { font-size:0.95rem; }
+  td { font-size:1rem; }
+}
+
+@media (max-width: 480px) {
+  html { font-size:16px; }
+  .ui-card-title { font-size:1.1rem; }
+  .ui-label { font-size:1rem; }
+  .ui-value { font-size:1.05rem; }
+  table { font-size:0.95rem; }
+  th { font-size:0.9rem; }
+  td { font-size:0.95rem; }
+}
 
 /* ── SCADA Industrial UI Helpers ── */
 .scada-panel{
@@ -1955,11 +2001,6 @@ function useOnline() {
     let alive = true;
     let t = null;
     const check = async () => {
-      if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        failRef.current = 2;
-        if (alive) setOn(false);
-        return;
-      }
       let timeout = null;
       try {
         const c = new AbortController();
@@ -2330,19 +2371,19 @@ function Badge({ color = "gray", children, dot, sm }) {
   return (
     <span style={{
       display:"inline-flex", alignItems:"center", gap:5,
-      padding: sm ? "2px 8px" : "3px 10px",
-      borderRadius:3,
-      fontSize: sm ? 9 : 10,
+      padding: sm ? "3px 9px" : "4px 11px",
+      borderRadius:4,
+      fontSize: sm ? 10 : 11,
       fontWeight:700,
       whiteSpace:"nowrap",
       background:bg,
       color:fg,
-      letterSpacing:".8px",
+      letterSpacing:".6px",
       textTransform:"uppercase",
-      border:`1px solid ${fg}55`,
+      border:`1px solid ${fg}60`,
       fontFamily:"'JetBrains Mono','Roboto Mono',monospace",
-      boxShadow:`inset 0 1px 0 ${fg}11`,
-    }}>
+      boxShadow:`inset 0 1px 0 ${fg}15, 0 1px 2px rgba(0,0,0,.2)`,
+    }}
       {dot && (
         <span className="scada-led" style={{
           width:6,height:6,borderRadius:"50%",
@@ -2439,7 +2480,7 @@ function Btn({ children, onClick, v="primary", sz="md", disabled, full, icon, lo
       onMouseDown={e=>{ if(!(disabled||ld)) e.currentTarget.style.transform="translateY(1px)"; }}
       onMouseUp={e=>{ if(!(disabled||ld)) e.currentTarget.style.transform="none"; }}>
       {ld
-        ? <><span className="spin" style={{ fontSize:13 }}>⟳</span>{typeof children==="string"?children:null}</>
+        ? <><span className="spin" style={{ fontSize:16 }}>⟳</span>{typeof children==="string"?children:null}</>
         : <>{icon&&<span style={{ fontSize:"1.1em" }}>{icon}</span>}{children}</>}
     </button>
   );
@@ -2448,17 +2489,17 @@ function Btn({ children, onClick, v="primary", sz="md", disabled, full, icon, lo
 // ── Input ─────────────────────────────────────────────────────────────
 function Input({ value, onChange, placeholder, type="text", disabled, onEnter, onKeyDown, onBlur, style={}, prefix, suffix }) {
   const focusStyle = { borderColor:TH.cyan, boxShadow:`inset 0 1px 2px rgba(0,0,0,.3), 0 0 0 2px ${TH.cyanDim}, 0 0 12px ${TH.cyanGlow}` };
-  const base = { width:"100%", padding:"9px 12px", borderRadius:4, fontSize:13, background:`linear-gradient(180deg, ${TH.surface}, ${TH.card})`, border:`1px solid ${TH.border}`, color:TH.text, outline:"none", transition:"all .14s", boxShadow:"inset 0 1px 2px rgba(0,0,0,.3)", ...style };
+  const base = { width:"100%", padding:"9px 12px", borderRadius:4, fontSize:16, background:`linear-gradient(180deg, ${TH.surface}, ${TH.card})`, border:`1px solid ${TH.border}`, color:TH.text, outline:"none", transition:"all .14s", boxShadow:"inset 0 1px 2px rgba(0,0,0,.3)", ...style };
   if (prefix || suffix) {
     return (
       <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
-        {prefix && <span style={{ position:"absolute",left:11,color:TH.muted,fontSize:14,pointerEvents:"none",zIndex:1 }}>{prefix}</span>}
+        {prefix && <span style={{ position:"absolute",left:11,color:TH.muted,fontSize:16,pointerEvents:"none",zIndex:1 }}>{prefix}</span>}
         <input value={value??""} onChange={onChange} placeholder={placeholder} type={type} disabled={disabled}
           onKeyDown={e=>{ onKeyDown?.(e); if (e.key==="Enter") onEnter?.(); }}
           style={{ ...base, paddingLeft:prefix?34:12, paddingRight:suffix?34:12 }}
           onFocus={e=>Object.assign(e.target.style, focusStyle)}
           onBlur={e=>{ e.target.style.borderColor=TH.border; e.target.style.boxShadow="none"; onBlur?.(e); }}/>
-        {suffix && <span style={{ position:"absolute",right:11,color:TH.muted,fontSize:14,pointerEvents:"none" }}>{suffix}</span>}
+        {suffix && <span style={{ position:"absolute",right:11,color:TH.muted,fontSize:16,pointerEvents:"none" }}>{suffix}</span>}
       </div>
     );
   }
@@ -2475,7 +2516,7 @@ function Input({ value, onChange, placeholder, type="text", disabled, onEnter, o
 function Textarea({ value, onChange, placeholder, rows=4, style={} }) {
   return (
     <textarea value={value||""} onChange={onChange} placeholder={placeholder} rows={rows}
-      style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:13,background:TH.card,border:`1px solid ${TH.border}`,color:TH.text,outline:"none",resize:"vertical",fontFamily:"inherit",lineHeight:1.6,...style }}
+      style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:16,background:TH.card,border:`1px solid ${TH.border}`,color:TH.text,outline:"none",resize:"vertical",fontFamily:"inherit",lineHeight:1.6,...style }}
       onFocus={e=>{ e.target.style.borderColor=TH.blue; e.target.style.boxShadow=`0 0 0 3px ${TH.blueDim}`; }}
       onBlur={e=>{ e.target.style.borderColor=TH.border; e.target.style.boxShadow="none"; }}/>
   );
@@ -2485,7 +2526,7 @@ function Textarea({ value, onChange, placeholder, rows=4, style={} }) {
 function Sel({ value, onChange, options, disabled, onBlur, style={} }) {
   return (
     <select value={value??""} onChange={onChange} disabled={disabled}
-      style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:13,background:TH.card,border:`1px solid ${TH.border}`,color:TH.text,outline:"none",cursor:disabled?"not-allowed":"pointer",...style }}
+      style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:16,background:TH.card,border:`1px solid ${TH.border}`,color:TH.text,outline:"none",cursor:disabled?"not-allowed":"pointer",...style }}
       onFocus={e=>{ e.target.style.borderColor=TH.blue; }}
       onBlur={e=>{ e.target.style.borderColor=TH.border; onBlur?.(e); }}>
       {(options||[]).map(o=><option key={o.value??o} value={o.value??o}>{o.label??o}</option>)}
@@ -2500,7 +2541,7 @@ function Toggle({ value, onChange, label }) {
       <div onClick={()=>onChange(!value)} style={{ width:42,height:24,borderRadius:12,background:value?TH.blue:TH.border,position:"relative",transition:"background .2s",flexShrink:0 }}>
         <div style={{ position:"absolute",top:3,left:value?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,.3)" }}/>
       </div>
-      {label&&<span style={{ fontSize:13,color:TH.text }}>{label}</span>}
+      {label&&<span style={{ fontSize:16,color:TH.text }}>{label}</span>}
     </label>
   );
 }
@@ -2509,11 +2550,11 @@ function Toggle({ value, onChange, label }) {
 function Field({ label, children, hint, required, error }) {
   return (
     <div>
-      {label&&<label style={{ display:"block",fontSize:11,fontWeight:error?800:600,color:error?TH.red:TH.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:".5px" }}>
+      {label&&<label style={{ display:"block",fontSize:14,fontWeight:error?800:600,color:error?TH.red:TH.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:".5px" }}>
         {label}{required&&<span style={{ color:TH.red,marginLeft:3 }}>*</span>}
       </label>}
       {children}
-      {(hint||error)&&<p style={{ fontSize:11,color:error?TH.red:TH.muted,marginTop:4,lineHeight:1.5 }}>{error||hint}</p>}
+      {(hint||error)&&<p style={{ fontSize:14,color:error?TH.red:TH.muted,marginTop:4,lineHeight:1.5 }}>{error||hint}</p>}
     </div>
   );
 }
@@ -2608,15 +2649,15 @@ function StatCard({ icon, label, value, sub, color=TH.violet, trend, onClick }) 
         </div>
         {trend!=null && (
           <div style={{ display:"flex",alignItems:"center",gap:3,padding:"4px 8px",borderRadius:20,background:trend>=0?TH.greenDim:TH.redDim,border:`1px solid ${trend>=0?TH.green:TH.red}33` }}>
-            <span style={{ fontSize:11,fontWeight:700,color:trend>=0?TH.green:TH.red,fontFamily:TH.mono }}>{trend>=0?"↑":"↓"}{Math.abs(trend)}%</span>
+            <span style={{ fontSize:14,fontWeight:700,color:trend>=0?TH.green:TH.red,fontFamily:TH.mono }}>{trend>=0?"↑":"↓"}{Math.abs(trend)}%</span>
           </div>
         )}
       </div>
-      <div style={{ fontSize:28,fontWeight:800,color,fontFamily:TH.mono,fontVariantNumeric:"tabular-nums",lineHeight:1,marginBottom:8,letterSpacing:"-.5px",textShadow:`0 0 20px ${color}44` }}>
+      <div style={{ fontSize:32,fontWeight:800,color,fontFamily:TH.mono,fontVariantNumeric:"tabular-nums",lineHeight:1,marginBottom:8,letterSpacing:"-.5px",textShadow:`0 0 20px ${color}44` }}>
         {value??<span style={{ opacity:.3 }}>—</span>}
       </div>
-      <div style={{ fontSize:12,fontWeight:600,color:TH.muted,letterSpacing:".5px",marginBottom:sub?4:0 }}>{label}</div>
-      {sub && <div style={{ fontSize:11,color:TH.faint,fontWeight:500 }}>{sub}</div>}
+      <div style={{ fontSize:15,fontWeight:600,color:TH.muted,letterSpacing:".5px",marginBottom:sub?4:0 }}>{label}</div>
+      {sub && <div style={{ fontSize:14,color:TH.faint,fontWeight:500 }}>{sub}</div>}
     </Card>
   );
 }
@@ -2644,7 +2685,7 @@ function PageHeader({ title, sub, action, back, onBack }) {
             background:`linear-gradient(180deg, ${TH.cardHi}, ${TH.card})`,
             border:`1px solid ${TH.border}`,borderRadius:6,
             padding:"5px 10px",color:TH.muted,cursor:"pointer",
-            fontSize:11,fontWeight:600,fontFamily:TH.mono,flexShrink:0
+            fontSize:14,fontWeight:600,fontFamily:TH.mono,flexShrink:0
           }}
             onMouseEnter={e=>{ e.currentTarget.style.borderColor=TH.cyan; e.currentTarget.style.color=TH.cyan; }}
             onMouseLeave={e=>{ e.currentTarget.style.borderColor=TH.border; e.currentTarget.style.color=TH.muted; }}>
@@ -2652,7 +2693,7 @@ function PageHeader({ title, sub, action, back, onBack }) {
           </button>
         )}
         {sub && (
-          <p style={{ fontSize:13,color:TH.muted,lineHeight:1.5,fontWeight:500,margin:0 }}>{sub}</p>
+          <p style={{ fontSize:16,color:TH.muted,lineHeight:1.5,fontWeight:500,margin:0 }}>{sub}</p>
         )}
       </div>
       {action && <div style={{ display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",flexShrink:0 }}>{action}</div>}
@@ -2664,7 +2705,7 @@ function PageHeader({ title, sub, action, back, onBack }) {
 function Table({ headers, rows, onRow, loading, emptyIcon="📭", emptyText="No records found" }) {
   return (
     <div style={{ overflowX:"auto",borderRadius:14,border:`1px solid ${TH.border}`,overflow:"hidden",boxShadow:`0 4px 20px rgba(0,0,0,.18)` }}>
-      <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13.5,minWidth:500,lineHeight:1.5 }}>
+      <table style={{ width:"100%",borderCollapse:"collapse",fontSize:16,minWidth:500,lineHeight:1.5 }}>
         <thead>
           <tr style={{
             background:`linear-gradient(180deg, ${TH.cardHi} 0%, ${TH.card} 100%)`,
@@ -2674,7 +2715,7 @@ function Table({ headers, rows, onRow, loading, emptyIcon="📭", emptyText="No 
               <th key={h} style={{
                 padding:"13px 18px",
                 textAlign:"left",
-                fontSize:11,
+                fontSize:14,
                 fontWeight:700,
                 color:TH.muted,
                 textTransform:"uppercase",
@@ -2691,8 +2732,8 @@ function Table({ headers, rows, onRow, loading, emptyIcon="📭", emptyText="No 
           {loading && (
             <tr>
               <td colSpan={headers.length} style={{ textAlign:"center",padding:64,color:TH.muted,background:TH.surface }}>
-                <span className="spin" style={{ fontSize:30,color:TH.cyan,display:"block",marginBottom:10 }}>⟳</span>
-                <div style={{ fontSize:11, fontFamily:TH.mono, letterSpacing:1.5, color:TH.muted, textTransform:"uppercase" }}>Loading data...</div>
+                <span className="spin" style={{ fontSize:36,color:TH.cyan,display:"block",marginBottom:10 }}>⟳</span>
+                <div style={{ fontSize:14, fontFamily:TH.mono, letterSpacing:1.5, color:TH.muted, textTransform:"uppercase" }}>Loading data...</div>
               </td>
             </tr>
           )}
@@ -2720,7 +2761,7 @@ function Table({ headers, rows, onRow, loading, emptyIcon="📭", emptyText="No 
                   color:j===0?TH.textHi:TH.text,
                   fontWeight:j===0?600:400,
                   verticalAlign:"middle",
-                  fontSize:13.5,
+                  fontSize:16,
                   ...(j===0 ? { borderLeft:`3px solid transparent` } : {})
                 }}>{cell}</td>
               ))}
@@ -2740,7 +2781,7 @@ function Pagination({ page, total, per, onChange }) {
   const s=(page-1)*per+1, e=Math.min(page*per,total);
   return (
     <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderTop:`1px solid ${TH.border}` }}>
-      <span style={{ fontSize:12,color:TH.muted }}>Showing {fNum(s)}–{fNum(e)} of {fNum(total)}</span>
+      <span style={{ fontSize:15,color:TH.muted }}>Showing {fNum(s)}–{fNum(e)} of {fNum(total)}</span>
       <div style={{ display:"flex",gap:4 }}>
         <Btn v="ghost" sz="xs" disabled={page===1} onClick={()=>onChange(page-1)}>←</Btn>
         {Array.from({length:Math.min(5,pages)},(_,i)=>{
@@ -2760,7 +2801,7 @@ function Tabs({ items, active, onChange, style={} }) {
     <div style={{ display:"flex",gap:0,borderBottom:`1px solid ${TH.border}`,marginBottom:20,overflowX:"auto",...style }}>
       {items.map(item=>(
         <button key={item.id} onClick={()=>onChange(item.id)}
-          style={{ padding:"10px 18px",fontSize:13,fontWeight:600,background:"none",border:"none",borderBottom:`2px solid ${active===item.id?TH.blue:"transparent"}`,color:active===item.id?TH.blue:TH.muted,cursor:"pointer",transition:"all .14s",display:"flex",alignItems:"center",gap:7,whiteSpace:"nowrap",flexShrink:0 }}>
+          style={{ padding:"10px 18px",fontSize:16,fontWeight:600,background:"none",border:"none",borderBottom:`2px solid ${active===item.id?TH.blue:"transparent"}`,color:active===item.id?TH.blue:TH.muted,cursor:"pointer",transition:"all .14s",display:"flex",alignItems:"center",gap:7,whiteSpace:"nowrap",flexShrink:0 }}>
           {item.icon&&<span>{item.icon}</span>}
           {item.label}
           {item.count!=null&&<Badge color={active===item.id?"blue":"gray"} sm>{item.count}</Badge>}
@@ -2784,7 +2825,7 @@ function Modal({ title, onClose, children, width=660, footer, subtitle }) {
         <div style={{ padding:"18px 22px",borderBottom:`1px solid ${TH.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0 }}>
           <div>
             <div style={{ fontSize:17,fontWeight:700,color:TH.text }}>{title}</div>
-            {subtitle&&<div style={{ fontSize:12,color:TH.muted,marginTop:3 }}>{subtitle}</div>}
+            {subtitle&&<div style={{ fontSize:15,color:TH.muted,marginTop:3 }}>{subtitle}</div>}
           </div>
           <button onClick={onClose} style={{ background:TH.hover,border:`1px solid ${TH.border}`,borderRadius:10,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:TH.muted,cursor:"pointer",flexShrink:0,marginLeft:16 }}>×</button>
         </div>
@@ -2811,8 +2852,8 @@ function Progress({ value, max=100, color, height=6, label }) {
   return (
     <div>
       {label&&<div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
-        <span style={{ fontSize:11,color:TH.muted }}>{label}</span>
-        <span style={{ fontSize:11,fontWeight:600,color:c,fontFamily:TH.mono }}>{~~pct}%</span>
+        <span style={{ fontSize:14,color:TH.muted }}>{label}</span>
+        <span style={{ fontSize:14,fontWeight:600,color:c,fontFamily:TH.mono }}>{~~pct}%</span>
       </div>}
       <div style={{ height,background:TH.border,borderRadius:height,overflow:"hidden" }}>
         <div style={{ height:"100%",width:`${pct}%`,background:c,borderRadius:height,transition:"width .5s cubic-bezier(.4,0,.2,1)",boxShadow:`0 0 8px ${c}50` }}/>
@@ -2827,7 +2868,7 @@ function Empty({ icon="📭", text="No data", sub, action }) {
     <div style={{ textAlign:"center",padding:"52px 20px",display:"flex",flexDirection:"column",alignItems:"center",gap:10 }}>
       <div style={{ fontSize:48,opacity:.15,filter:"grayscale(1)" }}>{icon}</div>
       <div style={{ fontSize:16,fontWeight:700,color:TH.muted }}>{text}</div>
-      {sub&&<div style={{ fontSize:12,color:TH.muted,maxWidth:320,lineHeight:1.6 }}>{sub}</div>}
+      {sub&&<div style={{ fontSize:15,color:TH.muted,maxWidth:320,lineHeight:1.6 }}>{sub}</div>}
       {action&&<div style={{ marginTop:8 }}>{action}</div>}
     </div>
   );
@@ -2838,7 +2879,7 @@ function Loader({ text="" }) {
   return (
     <div style={{ display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:56 }}>
       <div style={{ width:36,height:36,border:`3px solid ${TH.border}`,borderTop:`3px solid ${TH.blue}`,borderRadius:"50%" }} className="spin"/>
-      {text&&<span style={{ fontSize:13,color:TH.muted }}>{text}</span>}
+      {text&&<span style={{ fontSize:16,color:TH.muted }}>{text}</span>}
     </div>
   );
 }
@@ -2909,7 +2950,7 @@ function ToastProvider({ children }) {
           <div key={t.id} className="slide-up"
             style={{ background:TH.surface,border:`1px solid ${TC[t.type]||TH.border}`,borderLeft:`4px solid ${TC[t.type]||TH.blue}`,borderRadius:10,padding:"12px 16px",boxShadow:TH.shadowLg,display:"flex",alignItems:"flex-start",gap:10 }}>
             <span style={{ fontSize:16,flexShrink:0 }}>{{success:"✓",error:"✗",warning:"⚠",info:"ℹ"}[t.type]||"•"}</span>
-            <span style={{ fontSize:13,color:TH.text,lineHeight:1.5,flex:1 }}>{t.msg}</span>
+            <span style={{ fontSize:16,color:TH.text,lineHeight:1.5,flex:1 }}>{t.msg}</span>
             <button onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))} style={{ background:"none",border:"none",color:TH.muted,cursor:"pointer",fontSize:14,padding:0,flexShrink:0 }}>×</button>
           </div>
         ))}
@@ -2919,7 +2960,7 @@ function ToastProvider({ children }) {
 }
 
 // ── Chart tooltip style ───────────────────────────────────────────────
-const TT_STYLE = { background:TH.surface, border:`1px solid ${TH.border}`, borderRadius:9, fontSize:12, color:"#ffffff", boxShadow:TH.shadow };
+const TT_STYLE = { background:TH.surface, border:`1px solid ${TH.border}`, borderRadius:9, fontSize:15, color:"#ffffff", boxShadow:TH.shadow };
 const TT_ITEM_STYLE = { color:"#ffffff" };
 const TT_LABEL_STYLE = { color:"#ffffff" };
 const CHART_COLORS = [TH.blue, TH.green, TH.amber, TH.violet, TH.cyan, TH.pink, TH.red];
@@ -3029,7 +3070,7 @@ function LoginPage({ onLogin }) {
             <span className="fr-chip"><span style={{ color:TH.blue }}>⟟</span> <b>Mode:</b> Real-time</span>
           </div>
         </div>
-        <div style={{ position:"absolute",bottom:22,left:0,right:0,textAlign:"center",fontSize:10,color:TH.muted,zIndex:1 }}>
+        <div style={{ position:"absolute",bottom:22,left:0,right:0,textAlign:"center",fontSize:12,color:TH.muted,zIndex:1 }}>
           © Expo City Dubai. All rights reserved.
         </div>
       </div>
@@ -3037,7 +3078,7 @@ function LoginPage({ onLogin }) {
       {/* Right login form */}
       <div style={{ width:640,display:"flex",alignItems:"center",justifyContent:"center",padding:36,position:"relative",zIndex:1 }}>
         <div style={{ width:"100%",maxWidth:560 }}>
-          <div style={{ position:"absolute",top:14,right:18,display:"inline-flex",alignItems:"center",gap:8,padding:"7px 11px",borderRadius:12,border:`1px solid ${TH.border}`,background:"rgba(10,18,34,.55)",fontSize:12,color:TH.muted }}>
+          <div style={{ position:"absolute",top:14,right:18,display:"inline-flex",alignItems:"center",gap:8,padding:"7px 11px",borderRadius:12,border:`1px solid ${TH.border}`,background:"rgba(10,18,34,.55)",fontSize:15,color:TH.muted }}>
             <span className="pulse-dot" style={{ width:7,height:7,borderRadius:"50%",background:TH.green,display:"inline-block" }}/>
             System time: <span style={{ color:TH.text,fontWeight:700 }}>{now.toLocaleTimeString()}</span>
           </div>
@@ -3046,7 +3087,7 @@ function LoginPage({ onLogin }) {
           </div>
           <div style={{ textAlign:"center",marginTop:16,marginBottom:14 }}>
             <div style={{ fontSize:20,fontWeight:900,letterSpacing:".06em",color:TH.text }}>EXPO CITY DUBAI</div>
-            <div style={{ fontSize:12,color:TH.muted,letterSpacing:".12em",textTransform:"uppercase",marginTop:6 }}>Enterprise Access Control · Face Recognition</div>
+            <div style={{ fontSize:15,color:TH.muted,letterSpacing:".12em",textTransform:"uppercase",marginTop:6 }}>Enterprise Access Control · Face Recognition</div>
           </div>
           <Card className="signin-card" pad={0} style={{ marginTop:58,marginBottom:20,overflow:"hidden",background:"linear-gradient(180deg, rgba(18,31,53,.88), rgba(14,24,41,.92))",transform:`perspective(1200px) rotateX(${(50-mouseFx.y)/65}deg) rotateY(${(mouseFx.x-50)/65}deg)` }}>
             <div className="signin-card-energy" />
@@ -3057,7 +3098,7 @@ function LoginPage({ onLogin }) {
                   <div style={{ width:38,height:38,borderRadius:10,background:TH.blueDim,border:`1px solid ${TH.blue}55`,display:"flex",alignItems:"center",justifyContent:"center",color:TH.blue,fontSize:17 }}>🔐</div>
                   <div>
                     <div style={{ fontSize:17,fontWeight:800,color:TH.text }}>Account Login</div>
-                    <div style={{ fontSize:13,color:TH.muted }}>Use your authorized credentials</div>
+                    <div style={{ fontSize:16,color:TH.muted }}>Use your authorized credentials</div>
                   </div>
                 </div>
               </div>
@@ -3070,13 +3111,13 @@ function LoginPage({ onLogin }) {
                   <Input value={p} onChange={e=>setP(e.target.value)} placeholder="password" type={showPass ? "text" : "password"} prefix="🔒" onEnter={go}
                     onKeyDown={e=>setCapsOn(e.getModifierState?.("CapsLock"))}/>
                 </Field>
-                {capsOn && <div style={{ marginTop:8,fontSize:12,color:TH.amber }}>Caps Lock is ON</div>}
+                {capsOn && <div style={{ marginTop:8,fontSize:15,color:TH.amber }}>Caps Lock is ON</div>}
                 <div style={{ marginTop:14,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap" }}>
-                  <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:TH.muted }}>
+                  <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:15,color:TH.muted }}>
                     <input type="checkbox" checked={showPass} onChange={e=>setShowPass(e.target.checked)} />
                     Show password
                   </label>
-                  <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:TH.muted }}>
+                  <label style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:15,color:TH.muted }}>
                     <input type="checkbox" checked={rememberUser} onChange={e=>setRememberUser(e.target.checked)} />
                     Remember username
                   </label>
@@ -3166,9 +3207,9 @@ function Sidebar({ page, onNav, user, open, onToggle, alertCount=0 }) {
         </div>
         {open&&<>
           <div style={{ flex:1,minWidth:0 }}>
-            <div style={{ fontSize:18,fontWeight:900,color:TH.text,letterSpacing:"-.1px",lineHeight:1.2 }}>Expo City Dubai</div>
+            <div style={{ fontSize:20,fontWeight:900,color:TH.text,letterSpacing:"-.1px",lineHeight:1.2 }}>Expo City Dubai</div>
           </div>
-          <button onClick={onToggle} style={{ background:"rgba(0,238,255,.10)",border:`1px solid rgba(0,238,255,.28)`,color:"rgba(255,255,255,.75)",cursor:"pointer",fontSize:15,padding:"5px 8px",borderRadius:7,flexShrink:0,lineHeight:1,fontWeight:700,transition:"all .14s" }}
+          <button onClick={onToggle} style={{ background:"rgba(0,238,255,.10)",border:`1px solid rgba(0,238,255,.28)`,color:"rgba(255,255,255,.75)",cursor:"pointer",fontSize:18,padding:"5px 8px",borderRadius:7,flexShrink:0,lineHeight:1,fontWeight:700,transition:"all .14s" }}
             onMouseEnter={e=>{ e.currentTarget.style.background="rgba(0,238,255,.20)"; e.currentTarget.style.color="#ffffff"; }}
             onMouseLeave={e=>{ e.currentTarget.style.background="rgba(0,238,255,.10)"; e.currentTarget.style.color="rgba(255,255,255,.75)"; }}>‹</button>
         </>}
@@ -3179,7 +3220,7 @@ function Sidebar({ page, onNav, user, open, onToggle, alertCount=0 }) {
       <nav style={{ flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden",padding:"6px 0 8px" }}>
         {NAV.map((item,i)=>{
           if (item.s) return open
-            ? <div key={i} style={{ padding:"10px 14px 6px",fontSize:10,fontWeight:700,color:TH.cyan,textTransform:"uppercase",letterSpacing:"1.6px",fontFamily:TH.mono,borderTop:i>0?`1px solid ${TH.border}`:"none",marginTop:i>0?6:0,paddingTop:i>0?10:10,opacity:.92 }}>▸ {item.s}</div>
+            ? <div key={i} style={{ padding:"10px 14px 6px",fontSize:12,fontWeight:700,color:TH.cyan,textTransform:"uppercase",letterSpacing:"1.6px",fontFamily:TH.mono,borderTop:i>0?`1px solid ${TH.border}`:"none",marginTop:i>0?6:0,paddingTop:i>0?10:10,opacity:.92 }}>▸ {item.s}</div>
             : <div key={i} style={{ height:2 }}/>;
 
           if (!can(role, item.id) && !isSuperadmin) return null;
@@ -3853,6 +3894,12 @@ function DashboardPage({ onNav }) {
           <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:12 }}>
             <span style={{ fontSize:13 }}>◫</span>
             <span style={{ fontSize:12,fontWeight:800,color:TH.textHi,textTransform:"uppercase",letterSpacing:".5px" }}>Device Health</span>
+            {health?.hostNetwork?.ok === false && (
+              <span title={`Network down: ${health?.hostNetwork?.error || "no connectivity"}`}
+                style={{ fontSize:10, color: TH.amber, marginLeft: 4, fontWeight: 600 }}>
+                ⚠ Offline
+              </span>
+            )}
             <div style={{ marginLeft:"auto",width:8,height:8,borderRadius:"50%",background:devOnline>0?TH.green:TH.red,boxShadow:`0 0 6px ${devOnline>0?TH.green:TH.red}` }}/>
           </div>
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
@@ -4193,28 +4240,28 @@ function FRMonitorPage() {
       <Card style={{ marginBottom:12 }}>
         <div style={{ display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:9 }}>
           <div>
-            <div style={{ fontSize:13,fontWeight:800,color:TH.text }}>AI Live Insights</div>
-            <div style={{ fontSize:12,color:TH.muted }}>{ai.summary}</div>
+            <div style={{ fontSize:14,fontWeight:800,color:TH.textHi }}>AI Live Insights</div>
+            <div style={{ fontSize:12,color:TH.muted,marginTop:2 }}>{ai.summary}</div>
           </div>
           <Badge color={ai.riskLevel==="high"?"red":ai.riskLevel==="medium"?"amber":"green"} sm>
             {ai.riskLevel === "high" ? "Risk: High" : ai.riskLevel === "medium" ? "Risk: Medium" : "Risk: Low"}
           </Badge>
         </div>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8,marginBottom:9 }}>
-          <div style={{ border:`1px solid ${TH.border}`,borderRadius:10,padding:"10px 11px",background:TH.surface }}>
-            <div style={{ fontSize:11,color:TH.muted }}>Denied Rate</div>
-            <div style={{ fontSize:18,fontWeight:800,color:ai.deniedRate>=35?TH.red:ai.deniedRate>=20?TH.amber:TH.green }}>{ai.deniedRate.toFixed(1)}%</div>
+          <div style={{ border:`1px solid ${TH.border}`,borderRadius:10,padding:"10px 11px",background:`linear-gradient(180deg, ${TH.cardHi} 0%, ${TH.surface} 100%)`,boxShadow:`0 2px 8px rgba(0,0,0,.2)` }}>
+            <div style={{ fontSize:12,color:TH.muted,fontWeight:500 }}>Denied Rate</div>
+            <div style={{ fontSize:20,fontWeight:800,color:ai.deniedRate>=35?TH.red:ai.deniedRate>=20?TH.amber:TH.green,marginTop:2 }}>{ai.deniedRate.toFixed(1)}%</div>
           </div>
-          <div style={{ border:`1px solid ${TH.border}`,borderRadius:10,padding:"10px 11px",background:TH.surface }}>
-            <div style={{ fontSize:11,color:TH.muted }}>Unknown Denied</div>
-            <div style={{ fontSize:18,fontWeight:800,color:ai.unknownDenied>0?TH.red:TH.green }}>{fNum(ai.unknownDenied)}</div>
+          <div style={{ border:`1px solid ${TH.border}`,borderRadius:10,padding:"10px 11px",background:`linear-gradient(180deg, ${TH.cardHi} 0%, ${TH.surface} 100%)`,boxShadow:`0 2px 8px rgba(0,0,0,.2)` }}>
+            <div style={{ fontSize:12,color:TH.muted,fontWeight:500 }}>Unknown Denied</div>
+            <div style={{ fontSize:20,fontWeight:800,color:ai.unknownDenied>0?TH.red:TH.green,marginTop:2 }}>{fNum(ai.unknownDenied)}</div>
           </div>
-          <div style={{ border:`1px solid ${TH.border}`,borderRadius:10,padding:"10px 11px",background:TH.surface }}>
-            <div style={{ fontSize:11,color:TH.muted }}>Hot Zone</div>
-            <div style={{ fontSize:14,fontWeight:800,color:TH.text }}>{ai.topDeniedZone?.[0] || "—"}</div>
+          <div style={{ border:`1px solid ${TH.border}`,borderRadius:10,padding:"10px 11px",background:`linear-gradient(180deg, ${TH.cardHi} 0%, ${TH.surface} 100%)`,boxShadow:`0 2px 8px rgba(0,0,0,.2)` }}>
+            <div style={{ fontSize:12,color:TH.muted,fontWeight:500 }}>Hot Zone</div>
+            <div style={{ fontSize:15,fontWeight:700,color:TH.textHi,marginTop:2 }}>{ai.topDeniedZone?.[0] || "—"}</div>
           </div>
-          <div style={{ border:`1px solid ${TH.border}`,borderRadius:10,padding:"10px 11px",background:TH.surface }}>
-            <div style={{ fontSize:11,color:TH.muted }}>Repeated Identity</div>
+          <div style={{ border:`1px solid ${TH.border}`,borderRadius:10,padding:"10px 11px",background:`linear-gradient(180deg, ${TH.cardHi} 0%, ${TH.surface} 100%)`,boxShadow:`0 2px 8px rgba(0,0,0,.2)` }}>
+            <div style={{ fontSize:12,color:TH.muted,fontWeight:500 }}>Repeated Identity</div>
             <div style={{ fontSize:14,fontWeight:800,color:TH.text }}>{ai.topDeniedIdentity?.[0] || "—"}</div>
           </div>
         </div>
@@ -4246,9 +4293,9 @@ function FRMonitorPage() {
               const designation = ev?.designation || meta?.designation || "—";
               return (
                 <div key={frMonitorDedupeKey(ev)} onClick={()=>setSel(ev)} className={i<4&&!paused?"fade-in":undefined}
-                  style={{ background:TH.card,border:`2px solid ${ok?TH.green+"40":TH.red+"40"}`,borderRadius:13,padding:14,cursor:"pointer",position:"relative",overflow:"hidden",transition:"all .15s" }}
-                  onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-3px)"; e.currentTarget.style.boxShadow=`0 10px 32px ${ok?TH.green+"20":TH.red+"20"}`; }}
-                  onMouseLeave={e=>{ e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="none"; }}>
+                  style={{ background:`linear-gradient(180deg, ${TH.cardHi} 0%, ${TH.card} 100%)`,border:`2px solid ${ok?TH.green+"60":TH.red+"60"}`,borderRadius:13,padding:14,cursor:"pointer",position:"relative",overflow:"hidden",transition:"all .15s",boxShadow:`0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04)` }}
+                  onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-3px)"; e.currentTarget.style.boxShadow=`0 10px 32px ${ok?TH.green+"30":TH.red+"30"}, 0 4px 16px rgba(0,0,0,.40)`; e.currentTarget.style.borderColor=ok?TH.green:TH.red; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow=`0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04)`; e.currentTarget.style.borderColor=`${ok?TH.green+"60":TH.red+"60"}`; }}>
                   <div style={{ position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${ok?TH.green:TH.red},${ok?TH.green+"50":TH.red+"50"})` }}/>
                   <div style={{ display:"flex",gap:10,alignItems:"center",marginBottom:10 }}>
                     <div style={{ position:"relative" }}>
@@ -4256,24 +4303,24 @@ function FRMonitorPage() {
                       <div style={{ position:"absolute",bottom:-2,right:-2,width:16,height:16,borderRadius:"50%",background:ok?TH.green:TH.red,border:`2px solid ${TH.card}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:700 }}>{ok?"✓":"✗"}</div>
                     </div>
                     <div style={{ flex:1,minWidth:0 }}>
-                      <div style={{ fontSize:13,fontWeight:700,color:TH.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{n}</div>
-                      <div style={{ fontSize:11,color:TH.muted }}>{ev.department||ev.dept||meta?.department||"—"}</div>
-                      <div style={{ fontSize:10,color:TH.muted,fontFamily:TH.mono }}>Pass: {passNo}</div>
-                      <div style={{ fontSize:10,color:TH.muted,fontFamily:TH.mono }}>Card: {cardId}</div>
-                      <div style={{ fontSize:10,color:TH.muted }}>{designation}</div>
+                      <div style={{ fontSize:14,fontWeight:700,color:TH.textHi,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:"-0.2px" }}>{n}</div>
+                      <div style={{ fontSize:12,color:TH.muted,marginTop:"2px",fontWeight:500 }}>{ev.department||ev.dept||meta?.department||"—"}</div>
+                      <div style={{ fontSize:11,color:TH.faint,fontFamily:TH.mono,marginTop:"3px" }}>Pass: <span style={{color:TH.muted}}>{passNo}</span></div>
+                      <div style={{ fontSize:11,color:TH.faint,fontFamily:TH.mono }}>Card: <span style={{color:TH.muted}}>{cardId}</span></div>
+                      <div style={{ fontSize:11,color:TH.faint,marginTop:"2px" }}>{designation}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize:11,color:TH.muted,marginBottom:7 }}>📍 {ev.zone||"—"}</div>
+                  <div style={{ fontSize:12,color:TH.muted,marginBottom:7,fontWeight:500 }}>📍 {ev.zone||"—"}</div>
                   <div style={{ display:"flex",gap:5,flexWrap:"wrap",marginBottom:9 }}>
                     <Badge color="blue" sm>{ev.authMode||"—"}</Badge>
                     {ok?<Badge color="green" sm>Granted</Badge>:<Badge color="red" sm>Denied</Badge>}
                     {!ok && logRowMatchesUnknownDeniedPattern(ev) && <Badge color="amber" sm>AI Flag</Badge>}
                   </div>
                   <div style={{ display:"flex",justifyContent:"space-between",paddingTop:9,borderTop:`1px solid ${TH.border}`,alignItems:"center",gap:8 }}>
-                    <span style={{ fontSize:10,color:TH.muted }}>
-                      {ok ? "AI: normal pattern" : (logRowMatchesUnknownDeniedPattern(ev) ? "AI: unknown denied pattern" : "AI: denied event")}
+                    <span style={{ fontSize:11,color:TH.faint,fontWeight:500 }}>
+                      {ok ? "✓ Normal" : (logRowMatchesUnknownDeniedPattern(ev) ? "⚠ Unknown Pattern" : "✗ Denied")}
                     </span>
-                    <span style={{ fontSize:12,fontWeight:700,color:TH.text,fontFamily:TH.mono }}>{fT(logEventTime(ev))}</span>
+                    <span style={{ fontSize:13,fontWeight:700,color:TH.textHi,fontFamily:TH.mono }}>{fT(logEventTime(ev))}</span>
                   </div>
                 </div>
               );
@@ -5838,6 +5885,17 @@ function EmployeesPage({ onNav, onEnroll }) {
     const t = setInterval(() => { reloadLogs(); reloadAttendance(); }, 30000);
     return () => clearInterval(t);
   }, [attDate, reloadLogs, reloadAttendance]);
+
+  useWS(useCallback(msg => {
+    if (msg?.type === "ACCESS_EVENT") {
+      reloadLogs();
+      if (!attDate) reloadAttendance();
+    }
+    if (msg?.type === "EMPLOYEE_UPDATED") {
+      reload();
+    }
+  }, [reloadLogs, reloadAttendance, reload, attDate]));
+
   const emps = data?.employees||[];
   const attendanceByEmp = useMemo(() => {
     const map = new Map();
@@ -5962,10 +6020,10 @@ function EmployeesPage({ onNav, onEnroll }) {
     for (const [k, msg] of req) {
       if (!String(form[k] || "").trim()) err[k] = msg;
     }
-    if (!/^\d{2}\/\d{2}\/(\d{2}|\d{4})$/.test(String(form.passIssueDate || "").trim()) || !dmyToISO(form.passIssueDate)) {
+    if (String(form.passIssueDate || "").trim() && (!/^\d{2}\/\d{2}\/(\d{2}|\d{4})$/.test(String(form.passIssueDate).trim()) || !dmyToISO(form.passIssueDate))) {
       err.passIssueDate = "Use format dd/mm/yy";
     }
-    if (!/^\d{2}\/\d{2}\/(\d{2}|\d{4})$/.test(String(form.passExpiryDate || "").trim()) || !dmyToISO(form.passExpiryDate)) {
+    if (String(form.passExpiryDate || "").trim() && (!/^\d{2}\/\d{2}\/(\d{2}|\d{4})$/.test(String(form.passExpiryDate).trim()) || !dmyToISO(form.passExpiryDate))) {
       err.passExpiryDate = "Use format dd/mm/yy";
     }
     if (!err.email && !emailOk(form.email)) err.email = "Enter a valid email address";
@@ -6439,28 +6497,28 @@ function EmployeesPage({ onNav, onEnroll }) {
           <Field label="Division" error={showFieldError("division")}><Input value={form.division} onChange={e=>setForm(p=>({...p,division:e.target.value}))} onBlur={()=>markTouched("division")} placeholder="Operations" style={showFieldError("division") ? { borderColor:TH.red } : {}}/></Field>
           <Field label="Sipass Access Profile" error={showFieldError("accessLevel")}><Sel value={form.accessLevel} onChange={e=>setForm(p=>({...p,accessLevel:e.target.value}))} onBlur={()=>markTouched("accessLevel")} style={showFieldError("accessLevel") ? { borderColor:TH.red } : {}} options={["L1 General","L2 Restricted","L3 Confidential","L4 Classified"].map(l=>({value:l,label:l}))}/></Field>
           <Field label="Cardholder Status" error={showFieldError("cardholderStatus")}><Sel value={form.cardholderStatus} onChange={e=>setForm(p=>({...p,cardholderStatus:e.target.value}))} onBlur={()=>markTouched("cardholderStatus")} style={showFieldError("cardholderStatus") ? { borderColor:TH.red } : {}} options={["Active","Inactive","Suspended","Expired"].map(s=>({value:s,label:s}))}/></Field>
-          <Field label="Shift Schedule" error={showFieldError("shiftSchedule")}><Input value={form.shiftSchedule} onChange={e=>setForm(p=>({...p,shiftSchedule:e.target.value}))} onBlur={()=>markTouched("shiftSchedule")} placeholder="Day Shift" style={showFieldError("shiftSchedule") ? { borderColor:TH.red } : {}}/></Field>
+          <Field label="Shift Schedule" error={showFieldError("shiftSchedule")}><Sel value={form.shiftSchedule} onChange={e=>setForm(p=>({...p,shiftSchedule:e.target.value}))} onBlur={()=>markTouched("shiftSchedule")} style={showFieldError("shiftSchedule") ? { borderColor:TH.red } : {}} options={(()=>{ const base=["","Day Shift","Night Shift","Morning Shift","Evening Shift","Rotational Shift","Weekend Shift","Flexible"]; const cur=String(form.shiftSchedule||"").trim(); const opts=cur&&!base.includes(cur)?[...base,cur]:base; return opts.map(s=>({value:s,label:s||"Select shift…"})); })()}/></Field>
           <Field label="Pass Issue Date" error={showFieldError("passIssueDate")}>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 42px",gap:8 }}>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
               <Input value={form.passIssueDate} onChange={e=>setForm(p=>({...p,passIssueDate:formatDateDMY(e.target.value)}))} onBlur={()=>markTouched("passIssueDate")} placeholder="dd/mm/yy" pattern="\d{2}/\d{2}/\d{2}" style={showFieldError("passIssueDate") ? { borderColor:TH.red } : {}}/>
               <input
                 type="date"
                 value={dmyToISO(form.passIssueDate)}
                 onChange={e=>setForm(p=>({...p,passIssueDate:isoToDMY(e.target.value)}))}
                 onBlur={()=>markTouched("passIssueDate")}
-                style={{ width:"100%",padding:"9px 8px",borderRadius:8,fontSize:13,background:TH.card,border:`1px solid ${showFieldError("passIssueDate") ? TH.red : TH.border}`,color:TH.text,outline:"none",cursor:"pointer" }}
+                style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:14,background:TH.card,border:`1px solid ${showFieldError("passIssueDate") ? TH.red : TH.border}`,color:TH.text,outline:"none",cursor:"pointer" }}
               />
             </div>
           </Field>
           <Field label="Pass Expiry Date" error={showFieldError("passExpiryDate")}>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 42px",gap:8 }}>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
               <Input value={form.passExpiryDate} onChange={e=>setForm(p=>({...p,passExpiryDate:formatDateDMY(e.target.value)}))} onBlur={()=>markTouched("passExpiryDate")} placeholder="dd/mm/yy" pattern="\d{2}/\d{2}/\d{2}" style={showFieldError("passExpiryDate") ? { borderColor:TH.red } : {}}/>
               <input
                 type="date"
                 value={dmyToISO(form.passExpiryDate)}
                 onChange={e=>setForm(p=>({...p,passExpiryDate:isoToDMY(e.target.value)}))}
                 onBlur={()=>markTouched("passExpiryDate")}
-                style={{ width:"100%",padding:"9px 8px",borderRadius:8,fontSize:13,background:TH.card,border:`1px solid ${showFieldError("passExpiryDate") ? TH.red : TH.border}`,color:TH.text,outline:"none",cursor:"pointer" }}
+                style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:14,background:TH.card,border:`1px solid ${showFieldError("passExpiryDate") ? TH.red : TH.border}`,color:TH.text,outline:"none",cursor:"pointer" }}
               />
             </div>
           </Field>
@@ -8748,7 +8806,7 @@ function VisitorsPage({ onNav, onEnroll }) {
     return `${String(yyyy).padStart(4, "0")}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
   };
   const dateOk = (v) => Boolean(dmyToISO(v));
-  const timeOk = (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || "").trim());
+  const timeOk = (v) => /^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.test(String(v || "").trim());
   const toDate = (v) => {
     const m = String(v || "").trim().match(/^(\d{2})\/(\d{2})\/(\d{2}|\d{4})$/);
     if (!m) return null;
@@ -8846,7 +8904,7 @@ function VisitorsPage({ onNav, onEnroll }) {
     }
     if (!err.startDate && !dateOk(form.startDate)) err.startDate = "Use format dd/mm/yy";
     if (!err.endDate && !dateOk(form.endDate)) err.endDate = "Use format dd/mm/yy";
-    if (!err.visitTime && !timeOk(form.visitTime)) err.visitTime = "Use HH:MM (24h)";
+    if (!err.visitTime && !timeOk(form.visitTime)) err.visitTime = "Use HH:MM:SS (24h)";
     const from = toDate(form.startDate);
     const to = toDate(form.endDate);
     if (!err.startDate && !err.endDate && from && to && to < from) {
@@ -9469,7 +9527,7 @@ function VisitorsPage({ onNav, onEnroll }) {
           <Field label="Visiting Location"><Input value={editForm.visitingLocation||""} onChange={e=>setEditForm(p=>({...p,visitingLocation:e.target.value}))} placeholder="Location"/></Field>
           <Field label="Start Date"><Input value={editForm.scheduledFrom||""} onChange={e=>setEditForm(p=>({...p,scheduledFrom:e.target.value}))} placeholder="dd/mm/yy"/></Field>
           <Field label="End Date"><Input value={editForm.scheduledTo||""} onChange={e=>setEditForm(p=>({...p,scheduledTo:e.target.value}))} placeholder="dd/mm/yy"/></Field>
-          <Field label="Visit Time" style={{ gridColumn:"1/-1" }}><Input value={editForm.visitTime||""} onChange={e=>setEditForm(p=>({...p,visitTime:e.target.value}))} placeholder="HH:MM"/></Field>
+          <Field label="Visit Time" style={{ gridColumn:"1/-1" }}><Input value={editForm.visitTime||""} onChange={e=>setEditForm(p=>({...p,visitTime:e.target.value}))} placeholder="HH:MM:SS"/></Field>
         </div>
       </Modal>}
 
@@ -9520,9 +9578,21 @@ function VisitorsPage({ onNav, onEnroll }) {
                 style={showFieldError("visitorMobile")?{borderColor:TH.red}:{}}/>
             </div>
           </Field>
-          <Field label="Start Date" error={showFieldError("startDate")}><Input value={form.startDate} onChange={e=>setForm(p=>({...p,startDate:formatDateDMY(e.target.value)}))} onBlur={()=>markTouched("startDate")} placeholder="dd/mm/yy" style={showFieldError("startDate")?{borderColor:TH.red}:{}}/></Field>
-          <Field label="End Date" error={showFieldError("endDate")}><Input value={form.endDate} onChange={e=>setForm(p=>({...p,endDate:formatDateDMY(e.target.value)}))} onBlur={()=>markTouched("endDate")} placeholder="dd/mm/yy" style={showFieldError("endDate")?{borderColor:TH.red}:{}}/></Field>
-          <Field label="Visiting Time" error={showFieldError("visitTime")}><Input value={form.visitTime} onChange={e=>setForm(p=>({...p,visitTime:e.target.value}))} onBlur={()=>markTouched("visitTime")} placeholder="HH:MM" style={showFieldError("visitTime")?{borderColor:TH.red}:{}}/></Field>
+          <Field label="Start Date" error={showFieldError("startDate")}>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+              <Input value={form.startDate} onChange={e=>setForm(p=>({...p,startDate:formatDateDMY(e.target.value)}))} onBlur={()=>markTouched("startDate")} placeholder="dd/mm/yy" pattern="\d{2}/\d{2}/\d{2}" style={showFieldError("startDate")?{borderColor:TH.red}:{}}/>
+              <input type="date" value={dmyToISO(form.startDate)} onChange={e=>{ setForm(p=>({...p,startDate:isoToDMY(e.target.value)})); markTouched("startDate"); }} style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:14,background:TH.card,border:`1px solid ${showFieldError("startDate")?TH.red:TH.border}`,color:TH.text,outline:"none",cursor:"pointer" }}/>
+            </div>
+          </Field>
+          <Field label="End Date" error={showFieldError("endDate")}>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+              <Input value={form.endDate} onChange={e=>setForm(p=>({...p,endDate:formatDateDMY(e.target.value)}))} onBlur={()=>markTouched("endDate")} placeholder="dd/mm/yy" pattern="\d{2}/\d{2}/\d{2}" style={showFieldError("endDate")?{borderColor:TH.red}:{}}/>
+              <input type="date" value={dmyToISO(form.endDate)} onChange={e=>{ setForm(p=>({...p,endDate:isoToDMY(e.target.value)})); markTouched("endDate"); }} style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:14,background:TH.card,border:`1px solid ${showFieldError("endDate")?TH.red:TH.border}`,color:TH.text,outline:"none",cursor:"pointer" }}/>
+            </div>
+          </Field>
+          <Field label="Visiting Time" error={showFieldError("visitTime")}>
+              <input type="time" step="1" value={form.visitTime} onChange={e=>{ setForm(p=>({...p,visitTime:e.target.value})); markTouched("visitTime"); }} style={{ width:"100%",padding:"9px 12px",borderRadius:8,fontSize:14,background:TH.card,border:`1px solid ${showFieldError("visitTime")?TH.red:TH.border}`,color:TH.text,outline:"none",cursor:"pointer" }}/>
+          </Field>
           <Field label="Purpose" error={showFieldError("purpose")}>
             <Sel value={form.purpose} onChange={e=>setForm(p=>({...p,purpose:e.target.value}))}
               options={["Meeting","Interview","Delivery","Maintenance","Tour","Other"]}/>
@@ -9779,7 +9849,7 @@ function ExportPage() {
     const [y, mm, dd] = iso.split("-");
     return `${dd}/${mm}/${y.slice(-2)}`;
   };
-  const ALL_COLS = ["timestamp","employeeName","employeeId","company","department","zone","building","device","authMode","accessGranted","confidence","processingMs","temperature","direction","date"];
+  const ALL_COLS = ["timestamp","employeeName","employeeId","company","department","division","designation","zone","building","device","authMode","accessGranted","direction","cardId","accessLevel","cardholderStatus","shiftSchedule","passIssueDate","passExpiryDate","lineManager","email","phone","visitorName","visitorCompany","visitorEmail","visitorMobile","visitingDepartment","visitingLocation","visitingPersonName","confidence","processingMs","temperature","date"];
   const zoneOptions = useMemo(() => {
     const rows = Array.isArray(zData) ? zData : [];
     return [{ value:"all", label:"All Zones" }, ...rows

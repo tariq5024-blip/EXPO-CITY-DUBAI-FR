@@ -1,0 +1,15 @@
+[Unit]
+Description=Network Watchdog for Suprema Reader
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/network-watchdog.sh daemon
+Restart=always
+RestartSec=5
+User=test
+Environment="HOME=/home/test"
+
+[Install]
+WantedBy=multi-user.target

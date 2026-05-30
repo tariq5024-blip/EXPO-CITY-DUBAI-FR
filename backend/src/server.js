@@ -10,7 +10,7 @@ import { Ollama } from "ollama";
 import jwt from "jsonwebtoken";
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import net from "node:net";
 import QRCode from "qrcode";
@@ -18,7 +18,11 @@ import nodemailer from "nodemailer";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import http from "node:http";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { WebSocketServer } from "ws";
+
+const execAsync = promisify(exec);
 
 const app = express();
 const { EJSON } = BSON;
@@ -37,6 +41,83 @@ app.use((_req, res, next) => {
 /** Live dashboard / FR Monitor — browser connects with ?token=JWT (same secret as REST Bearer). */
 const wsClients = new Set();
 
+/** Token revocation cache for immediate session invalidation on suspension/deletion.
+ * Key: userId (employeeId or account _id), Value: { revokedAt, expiresAt }
+ * Automatically cleans up entries older than 13 hours (JWT expiry is 12h).
+ */
+const revokedTokenCache = new Map();
+const TOKEN_REVOCATION_TTL_MS = 13 * 60 * 60 * 1000; // 13 hours (JWT expiry + 1h buffer)
+
+/** Check if a userId has had their tokens revoked. Also cleans expired entries. */
+function isTokenRevoked(userId) {
+  const key = String(userId || "").trim();
+  if (!key) return false;
+  const entry = revokedTokenCache.get(key);
+  if (!entry) return false;
+  if (Date.now() > entry.expiresAt) {
+    revokedTokenCache.delete(key);
+    return false;
+  }
+  return true;
+}
+
+/** Revoke all tokens for a user. Called on suspension/deletion. */
+function revokeUserTokens(userId) {
+  const key = String(userId || "").trim();
+  if (!key) return;
+  revokedTokenCache.set(key, {
+    revokedAt: Date.now(),
+    expiresAt: Date.now() + TOKEN_REVOCATION_TTL_MS
+  });
+  console.log(`[auth] Tokens revoked for user: ${key}`);
+}
+
+/** Periodic cleanup of expired revocation entries. */
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of revokedTokenCache.entries()) {
+    if (now > entry.expiresAt) revokedTokenCache.delete(key);
+  }
+}, 60 * 60 * 1000); // hourly cleanup
+
+/** Lightweight LRU cache for expensive aggregations (AI insights, metrics, etc).
+ * Prevents repeated heavy queries from overloading MongoDB.
+ */
+class SimpleCache {
+  constructor(maxSize = 100, defaultTtlMs = 30000) {
+    this.maxSize = maxSize;
+    this.defaultTtlMs = defaultTtlMs;
+    this.cache = new Map();
+  }
+  get(key) {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return undefined;
+    }
+    // Move to end (LRU)
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.value;
+  }
+  set(key, value, ttlMs) {
+    const expiresAt = Date.now() + (ttlMs || this.defaultTtlMs);
+    if (this.cache.size >= this.maxSize) {
+      // Evict oldest
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+    this.cache.set(key, { value, expiresAt });
+  }
+  invalidate(pattern) {
+    for (const key of this.cache.keys()) {
+      if (key.includes(pattern)) this.cache.delete(key);
+    }
+  }
+}
+const aggregationCache = new SimpleCache(50, 30000); // 50 entries, 30s TTL
+
 function serializeLogForWs(doc) {
   if (!doc || typeof doc !== "object") return doc;
   const o = { ...doc };
@@ -48,9 +129,47 @@ function serializeLogForWs(doc) {
   return o;
 }
 
+/** WebSocket broadcast throttling - max 100 events/sec per client to prevent flooding. */
+const wsThrottleTimestamps = new Map();
+const WS_THROTTLE_MS = 100; // 100ms = 10 events/sec max per client
+
+function shouldThrottleWsClient(ws) {
+  const now = Date.now();
+  const lastSent = wsThrottleTimestamps.get(ws);
+  if (!lastSent || now - lastSent >= WS_THROTTLE_MS) {
+    wsThrottleTimestamps.set(ws, now);
+    return false;
+  }
+  return true;
+}
+
 function broadcastAccessEvent(doc) {
   const payload = serializeLogForWs(doc);
   const msg = JSON.stringify({ type: "ACCESS_EVENT", data: payload });
+  let dropped = 0;
+  for (const ws of wsClients) {
+    try {
+      if (ws.readyState !== 1) continue;
+      if (shouldThrottleWsClient(ws)) {
+        dropped++;
+        continue;
+      }
+      ws.send(msg);
+    } catch {
+      /* ignore */
+    }
+  }
+  // Cleanup stale throttle entries for disconnected clients periodically
+  if (dropped > 0 && wsThrottleTimestamps.size > wsClients.size * 2) {
+    for (const [ws] of wsThrottleTimestamps) {
+      if (!wsClients.has(ws)) wsThrottleTimestamps.delete(ws);
+    }
+  }
+}
+
+function broadcastEmployeeUpdated(emp) {
+  const payload = serializeLogForWs(emp);
+  const msg = JSON.stringify({ type: "EMPLOYEE_UPDATED", data: payload });
   for (const ws of wsClients) {
     try {
       if (ws.readyState === 1) ws.send(msg);
@@ -62,7 +181,7 @@ function broadcastAccessEvent(doc) {
 
 const PORT = Number(process.env.PORT || 4000);
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://mongo:27017/expo-fr";
-const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || "15mb";
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || "50mb";
 const REQUEST_TIMEOUT_MS = Math.max(2000, Number(process.env.REQUEST_TIMEOUT_MS || 30000));
 const RATE_LIMIT_WINDOW_MS = Math.max(1000, Number(process.env.RATE_LIMIT_WINDOW_MS || 60000));
 const RATE_LIMIT_MAX = Math.max(20, Number(process.env.RATE_LIMIT_MAX || 1200));
@@ -165,6 +284,25 @@ const SELF_HEALING_COOLDOWN_MS = Math.max(5000, Number(process.env.SELF_HEALING_
 const WATCHDOG_ENABLED = String(process.env.WATCHDOG_ENABLED ?? "true").toLowerCase() === "true";
 const WATCHDOG_TICK_MS = Math.max(5000, Number(process.env.WATCHDOG_TICK_MS || 15000));
 const WATCHDOG_STALE_PULL_MS = Math.max(20000, Number(process.env.WATCHDOG_STALE_PULL_MS || 45000));
+/** Device sync queue: retry operations (revoke/enroll/update) for offline devices when they come online. */
+const DEVICE_SYNC_QUEUE_ENABLED = String(process.env.DEVICE_SYNC_QUEUE_ENABLED ?? "true").toLowerCase() === "true";
+const DEVICE_SYNC_QUEUE_TICK_MS = Math.max(5000, Number(process.env.DEVICE_SYNC_QUEUE_TICK_MS || 30000));
+const DEVICE_SYNC_MAX_RETRIES = Math.max(0, Math.min(1000, Number(process.env.DEVICE_SYNC_MAX_RETRIES || 10)));
+const DEVICE_SYNC_BATCH_SIZE = Math.max(1, Math.min(100, Number(process.env.DEVICE_SYNC_BATCH_SIZE || 20)));
+/** Unlimited retention: keep queue items forever (retry indefinitely) - for devices offline 24h/1week+.
+ * When true, maxRetries is ignored and items stay pending until successful or manually cleared. */
+const DEVICE_SYNC_UNLIMITED_RETENTION =
+  String(process.env.DEVICE_SYNC_UNLIMITED_RETENTION ?? "true").toLowerCase() === "true";
+/** Max delay between retries in unlimited mode (default 1 hour). Prevents spamming while keeping items alive. */
+const DEVICE_SYNC_MAX_RETRY_DELAY_MS = Math.max(
+  60000,
+  Number(process.env.DEVICE_SYNC_MAX_RETRY_DELAY_MS || 60 * 60 * 1000)
+);
+/** Call G-SDK User.Delete on readers when a visitor is removed or suspended (database-only delete leaves templates on device). */
+const DEVICE_REVOKE_ON_VISITOR_REMOVE =
+  String(process.env.DEVICE_REVOKE_ON_VISITOR_REMOVE ?? "true").toLowerCase() === "true";
+/** After saving visitor enrollment photo, push Visual Face template to readers via gsdk-sidecar. */
+const VISITOR_ENROLLMENT_PUSH_DEVICES = String(process.env.VISITOR_ENROLLMENT_PUSH_DEVICES ?? "true").toLowerCase() === "true";
 
 const requestBuckets = new Map();
 setInterval(() => {
@@ -257,6 +395,59 @@ function resolveSupremaUserIdForDevice(emp) {
   const stored = String(emp?.supremaUserId || "").trim();
   if (stored) return stored;
   return deriveSupremaUserId(emp);
+}
+
+/** Derive Suprema device user ID for visitors. Must fit in uint32 (max 4294967295).
+ * Visitors get a 'V' prefix in string form, but numeric ID is based on their MongoDB _id.
+ */
+function deriveVisitorSupremaUserId(visitor) {
+  // Use visitor's MongoDB _id to create a deterministic unique ID
+  const hex = String(visitor?._id || "").replace(/[^a-fA-F0-9]/g, "");
+  if (hex.length >= 8) {
+    const numeric = String(parseInt(hex.slice(-8), 16) % 4294967295 || 1);
+    return `V${numeric}`;
+  }
+  // Fallback using timestamp + random
+  const ts = Date.now() % 10000000;
+  return `V${ts + 900000000}`; // Start at 900M to avoid collision with employee IDs
+}
+
+/** Prefer persisted supremaUserId for visitors, otherwise derive. */
+function resolveVisitorSupremaUserIdForDevice(visitor) {
+  const stored = String(visitor?.supremaUserId || "").trim();
+  if (stored) return stored;
+  return deriveVisitorSupremaUserId(visitor);
+}
+
+/** Collect all user ID variants to delete for a visitor (similar to employees). */
+function collectVisitorRevokeUserIds(visitor) {
+  const ids = new Set();
+  const add = (x) => {
+    const s = String(x ?? "").trim();
+    if (s) ids.add(s);
+  };
+  add(resolveVisitorSupremaUserIdForDevice(visitor));
+  add(deriveVisitorSupremaUserId(visitor));
+  // Also add any stored aliases
+  if (Array.isArray(visitor?.supremaAliases)) {
+    visitor.supremaAliases.forEach((a) => add(a));
+  }
+  return Array.from(ids);
+}
+
+/** Load visitor photo from disk storage as base64 string. */
+async function loadVisitorPhotoFromDisk(visitor) {
+  try {
+    if (!visitor?.photoStorageRelativeDir || !visitor?.photoStorageFile) return null;
+    const absDir = path.join(VISITOR_QR_STORAGE_DIR, visitor.photoStorageRelativeDir);
+    const photoPath = path.join(absDir, visitor.photoStorageFile);
+    if (!existsSync(photoPath)) return null;
+    const buffer = await readFile(photoPath);
+    return buffer.toString("base64");
+  } catch (e) {
+    console.error("[backend] loadVisitorPhotoFromDisk failed:", e?.message || e);
+    return null;
+  }
 }
 
 /** JSON fields for gsdk-sidecar enroll — maps users to BioStar access groups so doors can grant access. */
@@ -385,10 +576,33 @@ async function removeEmployeeFromDevices(employee, explicitUserIds = null) {
   out.userIdsTried = userIds;
   const devices = await collection("devices").find({}).toArray();
   const deadline = Math.max(GSDK_SIDECAR_HTTP_MS, 30000);
+  out.queued = [];
 
   for (const d of devices) {
     const sid = supremaNumericDeviceId(d) >>> 0;
     if (!sid) continue;
+
+    // Check if device is offline - queue for later if it is
+    const deviceStatus = String(d.status || "").toLowerCase();
+    const isOffline = deviceStatus === "offline" || deviceStatus === "" || !deviceStatus;
+    if (isOffline && DEVICE_SYNC_QUEUE_ENABLED) {
+      const q = await queueDeviceOperation("revoke", sid, employee?._id, {
+        userIds,
+        employeeId: employee?.employeeId,
+        name: employee?.name,
+        reason: "employee_suspended_or_deleted"
+      });
+      out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      out.results.push({
+        deviceMongoId: String(d._id),
+        supremaDeviceId: sid,
+        ok: false,
+        queued: true,
+        error: "device_offline_queued_for_sync"
+      });
+      continue;
+    }
+
     try {
       // Reader record SSL flags describe device_server TCP; sidecar talks to gateway rpc_server.
       // Use gateway TLS mode from env to avoid false "insecure" calls to TLS :4100.
@@ -414,17 +628,41 @@ async function removeEmployeeFromDevices(employee, explicitUserIds = null) {
         payload?.error ||
         payload?.message ||
         (response.ok ? "" : `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`);
+
+      // If delete failed, queue for retry
+      if (!okDel && DEVICE_SYNC_QUEUE_ENABLED) {
+        const q = await queueDeviceOperation("revoke", sid, employee?._id, {
+          userIds,
+          employeeId: employee?.employeeId,
+          name: employee?.name,
+          reason: "employee_suspended_or_deleted"
+        });
+        out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      }
+
       out.results.push({
         deviceMongoId: String(d._id),
         supremaDeviceId: sid,
         ok: okDel,
+        queued: !okDel && DEVICE_SYNC_QUEUE_ENABLED,
         error: okDel ? undefined : errDetail || "unknown"
       });
     } catch (e) {
+      // On exception, queue for retry
+      if (DEVICE_SYNC_QUEUE_ENABLED) {
+        const q = await queueDeviceOperation("revoke", sid, employee?._id, {
+          userIds,
+          employeeId: employee?.employeeId,
+          name: employee?.name,
+          reason: "employee_suspended_or_deleted"
+        });
+        out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      }
       out.results.push({
         deviceMongoId: String(d._id),
         supremaDeviceId: sid,
         ok: false,
+        queued: DEVICE_SYNC_QUEUE_ENABLED,
         error: e.message
       });
     }
@@ -433,11 +671,428 @@ async function removeEmployeeFromDevices(employee, explicitUserIds = null) {
   if (!out.results.length) {
     out.note =
       "No gateway device id on any reader — revoke skipped. Sync My Devices (or set deviceId / supremaDeviceId / BioStar id).";
-  } else if (out.results.every((r) => !r.ok)) {
+  } else if (out.results.every((r) => !r.ok && !r.queued)) {
     console.warn("[employees] User.Delete failed on all readers — face may still match:", userIds, out.results);
+  } else if (out.queued?.length > 0) {
+    console.log(`[employees] User.Delete queued for ${out.queued.length} offline/failed devices, will retry when online`);
   }
 
   return out;
+}
+
+/** Remove a visitor from all Suprema devices (User.Delete via sidecar).
+ * Queues for offline devices when DEVICE_SYNC_QUEUE_ENABLED.
+ */
+async function removeVisitorFromDevices(visitor, explicitUserIds = null) {
+  const out = { attempted: false, results: [], skipped: false, reason: "" };
+  if (!DEVICE_REVOKE_ON_VISITOR_REMOVE) {
+    out.skipped = true;
+    out.reason = "disabled";
+    return out;
+  }
+  if (!GSDK_SIDECAR_URL) {
+    out.skipped = true;
+    out.reason = "no_sidecar";
+    return out;
+  }
+  if (!GSDK_GATEWAY || !String(GSDK_GATEWAY).trim()) {
+    out.skipped = true;
+    out.reason = "no_gateway";
+    out.note =
+      "Set GSDK_GATEWAY to device_gateway rpc_server (host:4100). Without it, only MongoDB is updated; readers keep cached faces.";
+    return out;
+  }
+  const userIds = Array.isArray(explicitUserIds) && explicitUserIds.length
+    ? [...new Set(explicitUserIds.map((x) => String(x ?? "").trim()).filter(Boolean))]
+    : collectVisitorRevokeUserIds(visitor);
+  if (!userIds.length) {
+    out.skipped = true;
+    out.reason = "no_user_id";
+    return out;
+  }
+  out.attempted = true;
+  out.userIdsTried = userIds;
+  const devices = await collection("devices").find({}).toArray();
+  const deadline = Math.max(GSDK_SIDECAR_HTTP_MS, 30000);
+  out.queued = [];
+
+  for (const d of devices) {
+    const sid = supremaNumericDeviceId(d) >>> 0;
+    if (!sid) continue;
+
+    // Check if device is offline - queue for later if it is
+    const deviceStatus = String(d.status || "").toLowerCase();
+    const isOffline = deviceStatus === "offline" || deviceStatus === "" || !deviceStatus;
+    if (isOffline && DEVICE_SYNC_QUEUE_ENABLED) {
+      const q = await queueDeviceOperation("revoke", sid, visitor?._id, {
+        userIds,
+        visitorId: String(visitor?._id || ""),
+        name: visitor?.name,
+        reason: "visitor_suspended_or_deleted"
+      });
+      out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      out.results.push({
+        deviceMongoId: String(d._id),
+        supremaDeviceId: sid,
+        ok: false,
+        queued: true,
+        error: "device_offline_queued_for_sync"
+      });
+      continue;
+    }
+
+    try {
+      const useSSL = GSDK_USE_SSL;
+      const body = {
+        gateway: GSDK_GATEWAY,
+        deviceId: sid,
+        userIds,
+        useSSL,
+        ssl: useSSL
+      };
+      const { response, payload } = await fetchJsonWithTimeout(
+        `${GSDK_SIDECAR_URL}/users/delete`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        },
+        deadline
+      );
+      const okDel = Boolean(response.ok && payload?.ok);
+      const errDetail =
+        payload?.error ||
+        payload?.message ||
+        (response.ok ? "" : `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`);
+
+      // If delete failed, queue for retry
+      if (!okDel && DEVICE_SYNC_QUEUE_ENABLED) {
+        const q = await queueDeviceOperation("revoke", sid, visitor?._id, {
+          userIds,
+          visitorId: String(visitor?._id || ""),
+          name: visitor?.name,
+          reason: "visitor_suspended_or_deleted"
+        });
+        out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      }
+
+      out.results.push({
+        deviceMongoId: String(d._id),
+        supremaDeviceId: sid,
+        ok: okDel,
+        queued: !okDel && DEVICE_SYNC_QUEUE_ENABLED,
+        error: okDel ? undefined : errDetail || "unknown"
+      });
+    } catch (e) {
+      // On exception, queue for retry
+      if (DEVICE_SYNC_QUEUE_ENABLED) {
+        const q = await queueDeviceOperation("revoke", sid, visitor?._id, {
+          userIds,
+          visitorId: String(visitor?._id || ""),
+          name: visitor?.name,
+          reason: "visitor_suspended_or_deleted"
+        });
+        out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      }
+      out.results.push({
+        deviceMongoId: String(d._id),
+        supremaDeviceId: sid,
+        ok: false,
+        queued: DEVICE_SYNC_QUEUE_ENABLED,
+        error: e.message
+      });
+    }
+  }
+
+  if (!out.results.length) {
+    out.note =
+      "No gateway device id on any reader — revoke skipped. Sync My Devices (or set deviceId / supremaDeviceId / BioStar id).";
+  } else if (out.results.every((r) => !r.ok && !r.queued)) {
+    console.warn("[visitors] User.Delete failed on all readers — face may still match:", userIds, out.results);
+  } else if (out.queued?.length > 0) {
+    console.log(`[visitors] User.Delete queued for ${out.queued.length} offline/failed devices, will retry when online`);
+  }
+
+  return out;
+}
+
+/** Device Sync Queue: Queue an operation to be retried when a device comes online.
+ * Operations: 'revoke' (delete user), 'enroll' (push face), 'update' (metadata change)
+ */
+async function queueDeviceOperation(operation, deviceId, employeeId, payload = {}, options = {}) {
+  if (!DEVICE_SYNC_QUEUE_ENABLED || !mongoConnected) return { queued: false, reason: "disabled_or_no_db" };
+  const sid = Number(deviceId) >>> 0;
+  if (!sid) return { queued: false, reason: "invalid_device_id" };
+  const empId = String(employeeId || payload?.employeeId || payload?._id || "").trim();
+  const op = String(operation || "").trim().toLowerCase();
+  if (!["revoke", "enroll", "update", "delete"].includes(op)) {
+    return { queued: false, reason: "invalid_operation" };
+  }
+  const now = new Date();
+  const doc = {
+    deviceId: sid,
+    employeeId: empId || undefined,
+    operation: op,
+    payload,
+    status: "pending",
+    attempts: 0,
+    maxRetries: options.maxRetries || DEVICE_SYNC_MAX_RETRIES,
+    createdAt: now,
+    nextAttemptAt: options.immediate ? now : new Date(now.getTime() + 5000),
+    lastError: null,
+    processedAt: null
+  };
+  // For revoke/delete: deduplicate - only keep most recent pending for same device+employee+operation
+  if (op === "revoke" || op === "delete") {
+    await collection("device_sync_queue").deleteMany({
+      deviceId: sid,
+      employeeId: empId,
+      operation: { $in: ["revoke", "delete"] },
+      status: "pending"
+    });
+  }
+  // For enroll: update existing pending if exists (keep latest photo)
+  if (op === "enroll") {
+    const existing = await collection("device_sync_queue").findOne({
+      deviceId: sid,
+      employeeId: empId,
+      operation: "enroll",
+      status: "pending"
+    });
+    if (existing) {
+      await collection("device_sync_queue").updateOne(
+        { _id: existing._id },
+        { $set: { payload, nextAttemptAt: doc.nextAttemptAt, updatedAt: now } }
+      );
+      return { queued: true, operation: op, deviceId: sid, employeeId: empId, updated: true };
+    }
+  }
+  await collection("device_sync_queue").insertOne(doc);
+  return { queued: true, operation: op, deviceId: sid, employeeId: empId };
+}
+
+/** Get count of pending operations for a device or globally. */
+async function getDeviceSyncQueueStats(deviceId) {
+  if (!mongoConnected) return { total: 0, pending: 0, failed: 0 };
+  const match = deviceId ? { deviceId: Number(deviceId) >>> 0 } : {};
+  const [total, pending, failed] = await Promise.all([
+    collection("device_sync_queue").countDocuments(match),
+    collection("device_sync_queue").countDocuments({ ...match, status: "pending" }),
+    collection("device_sync_queue").countDocuments({ ...match, status: "failed" })
+  ]);
+  return { total, pending, failed };
+}
+
+/** Circuit breaker for device sync - tracks consecutive failures per device. */
+const deviceSyncCircuitBreakers = new Map();
+const CIRCUIT_BREAKER_THRESHOLD = 5; // Open circuit after 5 consecutive failures
+const CIRCUIT_BREAKER_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes cooldown
+
+function isCircuitOpen(deviceId) {
+  const cb = deviceSyncCircuitBreakers.get(Number(deviceId));
+  if (!cb) return false;
+  if (Date.now() > cb.resetAt) {
+    deviceSyncCircuitBreakers.delete(Number(deviceId));
+    return false;
+  }
+  return cb.failures >= CIRCUIT_BREAKER_THRESHOLD;
+}
+
+function recordDeviceSyncSuccess(deviceId) {
+  deviceSyncCircuitBreakers.delete(Number(deviceId));
+}
+
+function recordDeviceSyncFailure(deviceId) {
+  const sid = Number(deviceId);
+  const existing = deviceSyncCircuitBreakers.get(sid) || { failures: 0, resetAt: 0 };
+  existing.failures += 1;
+  existing.resetAt = Date.now() + CIRCUIT_BREAKER_COOLDOWN_MS;
+  deviceSyncCircuitBreakers.set(sid, existing);
+  return existing.failures;
+}
+
+/** Process sync queue for a specific device (called when device comes online or periodic). */
+async function processDeviceSyncQueueForDevice(deviceId, options = {}) {
+  const sid = Number(deviceId) >>> 0;
+  if (!sid || !mongoConnected || !GSDK_SIDECAR_URL) return { processed: 0, errors: [] };
+  // Check circuit breaker
+  if (isCircuitOpen(sid)) {
+    return { processed: 0, errors: [{ error: "circuit_breaker_open" }], skipped: true };
+  }
+  const batchSize = options.batchSize || DEVICE_SYNC_BATCH_SIZE;
+  const now = new Date();
+
+  // Build query for pending operations
+  const baseQuery = {
+    deviceId: sid,
+    status: "pending",
+    nextAttemptAt: { $lte: now }
+  };
+  // In unlimited retention mode, don't filter by max retries - keep trying forever
+  const query = DEVICE_SYNC_UNLIMITED_RETENTION
+    ? baseQuery
+    : { ...baseQuery, attempts: { $lt: DEVICE_SYNC_MAX_RETRIES } };
+
+  const ops = await collection("device_sync_queue")
+    .find(query)
+    .sort({ createdAt: 1 })
+    .limit(batchSize)
+    .toArray();
+  if (!ops.length) return { processed: 0, errors: [] };
+
+  const errors = [];
+  let processed = 0;
+  for (const op of ops) {
+    try {
+      let result;
+      if (op.operation === "revoke" || op.operation === "delete") {
+        result = await executeQueuedRevoke(sid, op);
+      } else if (op.operation === "enroll") {
+        result = await executeQueuedEnroll(sid, op);
+      } else if (op.operation === "update") {
+        result = await executeQueuedUpdate(sid, op);
+      }
+      if (result?.ok) {
+        await collection("device_sync_queue").updateOne(
+          { _id: op._id },
+          { $set: { status: "completed", processedAt: new Date(), lastError: null } }
+        );
+        processed++;
+      } else {
+        const attempts = (op.attempts || 0) + 1;
+        // In unlimited mode, cap retry delay at configured max (default 1 hour)
+        // In limited mode, use exponential backoff up to 30s then mark as failed
+        const delayMs = DEVICE_SYNC_UNLIMITED_RETENTION
+          ? Math.min(DEVICE_SYNC_MAX_RETRY_DELAY_MS, 5000 * Math.pow(2, Math.min(attempts, 12))) // cap at ~1 hour
+          : Math.min(30000, 5000 * Math.pow(2, attempts));
+
+        const shouldFail = !DEVICE_SYNC_UNLIMITED_RETENTION && attempts >= DEVICE_SYNC_MAX_RETRIES;
+
+        await collection("device_sync_queue").updateOne(
+          { _id: op._id },
+          {
+            $set: {
+              status: shouldFail ? "failed" : "pending",
+              lastError: result?.error || "unknown_error",
+              nextAttemptAt: new Date(Date.now() + delayMs)
+            },
+            $inc: { attempts: 1 }
+          }
+        );
+        if (shouldFail) {
+          errors.push({ operation: op.operation, employeeId: op.employeeId, error: result?.error });
+        }
+      }
+    } catch (e) {
+      const attempts = (op.attempts || 0) + 1;
+      const delayMs = DEVICE_SYNC_UNLIMITED_RETENTION
+        ? Math.min(DEVICE_SYNC_MAX_RETRY_DELAY_MS, 5000 * Math.pow(2, Math.min(attempts, 12)))
+        : 10000;
+      const shouldFail = !DEVICE_SYNC_UNLIMITED_RETENTION && attempts >= DEVICE_SYNC_MAX_RETRIES;
+
+      await collection("device_sync_queue").updateOne(
+        { _id: op._id },
+        {
+          $set: {
+            status: shouldFail ? "failed" : "pending",
+            lastError: e?.message || "exception",
+            nextAttemptAt: new Date(Date.now() + delayMs)
+          },
+          $inc: { attempts: 1 }
+        }
+      );
+      if (shouldFail) {
+        errors.push({ operation: op.operation, employeeId: op.employeeId, error: e?.message });
+      }
+    }
+  }
+  // Circuit breaker: record success if any operations succeeded, failure if all failed
+  if (processed > 0) {
+    recordDeviceSyncSuccess(sid);
+  } else if (ops.length > 0 && errors.length > 0 && !DEVICE_SYNC_UNLIMITED_RETENTION) {
+    const failureCount = recordDeviceSyncFailure(sid);
+    if (failureCount >= CIRCUIT_BREAKER_THRESHOLD) {
+      console.warn(`[device-sync] Circuit breaker opened for device ${sid} after ${failureCount} consecutive failures`);
+    }
+  }
+  return { processed, total: ops.length, errors, unlimitedRetention: DEVICE_SYNC_UNLIMITED_RETENTION };
+}
+
+/** Execute a queued revoke operation. */
+async function executeQueuedRevoke(deviceId, op) {
+  const userIds = op.payload?.userIds || (op.employeeId ? [op.employeeId] : []);
+  if (!userIds.length) return { ok: false, error: "no_user_ids" };
+  const deadline = Math.max(GSDK_SIDECAR_HTTP_MS, 30000);
+  try {
+    const useSSL = GSDK_USE_SSL;
+    const body = { gateway: GSDK_GATEWAY, deviceId, userIds, useSSL, ssl: useSSL };
+    const { response, payload } = await fetchJsonWithTimeout(
+      `${GSDK_SIDECAR_URL}/users/delete`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+      deadline
+    );
+    const ok = Boolean(response.ok && payload?.ok);
+    return { ok, error: ok ? null : (payload?.error || payload?.message || `HTTP ${response.status}`) };
+  } catch (e) {
+    return { ok: false, error: e?.message || "request_failed" };
+  }
+}
+
+/** Execute a queued enroll operation. */
+async function executeQueuedEnroll(deviceId, op) {
+  const payload = op.payload || {};
+  const userId = payload.userId || op.employeeId;
+  const photoBase64 = payload.photoBase64;
+  if (!userId || !photoBase64) return { ok: false, error: "missing_user_or_photo" };
+  const deadline = Math.max(GSDK_SIDECAR_HTTP_MS, 130000);
+  try {
+    const useSSL = GSDK_USE_SSL;
+    const agBody = sidecarAccessGroupBody();
+    const body = {
+      gateway: GSDK_GATEWAY,
+      deviceId,
+      userId,
+      name: payload.name || "",
+      imageBase64: photoBase64,
+      useSSL,
+      ssl: useSSL,
+      ...agBody
+    };
+    const { response, payload: resp } = await fetchJsonWithTimeout(
+      `${GSDK_SIDECAR_URL}/enrollment/push-face`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+      deadline
+    );
+    const ok = Boolean(response.ok && resp?.ok);
+    return { ok, error: ok ? null : (resp?.error || resp?.message || `HTTP ${response.status}`) };
+  } catch (e) {
+    return { ok: false, error: e?.message || "request_failed" };
+  }
+}
+
+/** Execute a queued update operation. */
+async function executeQueuedUpdate(deviceId, op) {
+  // Updates are typically name/card changes - treat as re-enroll for now
+  return executeQueuedEnroll(deviceId, op);
+}
+
+/** Global tick for processing device sync queue across all online devices. */
+async function tickDeviceSyncQueue() {
+  if (!DEVICE_SYNC_QUEUE_ENABLED || !mongoConnected || !GSDK_SIDECAR_URL) return { processed: 0, devices: 0 };
+  // Get all online devices
+  const onlineDevices = await collection("devices")
+    .find({ status: { $in: ["online", "connected"] } })
+    .project({ supremaDeviceId: 1, _id: 1 })
+    .toArray();
+  if (!onlineDevices.length) return { processed: 0, devices: 0 };
+  let totalProcessed = 0;
+  for (const d of onlineDevices) {
+    const sid = supremaNumericDeviceId(d) >>> 0;
+    if (!sid) continue;
+    const result = await processDeviceSyncQueueForDevice(sid);
+    totalProcessed += result.processed;
+  }
+  return { processed: totalProcessed, devices: onlineDevices.length };
 }
 
 /** True when HR/access fields imply the person must not authenticate on readers. */
@@ -506,6 +1161,7 @@ async function pushFaceEnrollmentToDevices(employee, photoBase64, options = {}) 
   const userId = resolveSupremaUserIdForDevice(employee);
   const devices = await collection("devices").find({}).toArray();
   const agBody = sidecarAccessGroupBody();
+  out.queued = [];
 
   // Face Normalize/Extract/Enroll can exceed 60s on some readers; keep backend timeout above sidecar default.
   const deadline = Math.max(GSDK_SIDECAR_HTTP_MS, 130000);
@@ -522,6 +1178,29 @@ async function pushFaceEnrollmentToDevices(employee, photoBase64, options = {}) 
   for (const d of devices) {
     const sid = supremaNumericDeviceId(d) >>> 0;
     if (!sid) continue;
+
+    // Check if device is offline - queue for later if it is
+    const deviceStatus = String(d.status || "").toLowerCase();
+    const isOffline = deviceStatus === "offline" || deviceStatus === "" || !deviceStatus;
+    if (isOffline && DEVICE_SYNC_QUEUE_ENABLED) {
+      const q = await queueDeviceOperation("enroll", sid, employee?._id, {
+        userId,
+        photoBase64,
+        name: employee?.name,
+        employeeId: employee?.employeeId,
+        ...agBody
+      });
+      out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      out.results.push({
+        deviceMongoId: String(d._id),
+        supremaDeviceId: sid,
+        ok: false,
+        queued: true,
+        error: "device_offline_queued_for_sync"
+      });
+      continue;
+    }
+
     try {
       // Reader record SSL flags describe device_server TCP; sidecar talks to gateway rpc_server.
       // Use gateway TLS mode from env to avoid false "insecure" calls to TLS :4100.
@@ -595,12 +1274,37 @@ async function pushFaceEnrollmentToDevices(employee, photoBase64, options = {}) 
           row.scanEnrollFallback = { ok: false, error: scanErr?.message || "scan-and-enroll failed" };
         }
       }
+      // If enrollment failed (and no fallback succeeded), queue for retry
+      if (!row.ok && DEVICE_SYNC_QUEUE_ENABLED && !row.queued) {
+        const q = await queueDeviceOperation("enroll", sid, employee?._id, {
+          userId,
+          photoBase64,
+          name: employee?.name,
+          employeeId: employee?.employeeId,
+          ...agBody
+        });
+        out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+        row.queued = true;
+        row.error = row.error || "enroll_failed_queued_for_retry";
+      }
       out.results.push(row);
     } catch (e) {
+      // On exception, queue for retry
+      if (DEVICE_SYNC_QUEUE_ENABLED) {
+        const q = await queueDeviceOperation("enroll", sid, employee?._id, {
+          userId,
+          photoBase64,
+          name: employee?.name,
+          employeeId: employee?.employeeId,
+          ...agBody
+        });
+        out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      }
       out.results.push({
         deviceMongoId: String(d._id),
         supremaDeviceId: sid,
         ok: false,
+        queued: DEVICE_SYNC_QUEUE_ENABLED,
         error: e.message
       });
     }
@@ -609,10 +1313,156 @@ async function pushFaceEnrollmentToDevices(employee, photoBase64, options = {}) 
   if (!out.results.length) {
     out.note =
       "No gateway device id on readers — run Sync on My Devices or set deviceId / supremaDeviceId.";
+  } else if (out.queued?.length > 0) {
+    console.log(`[enrollment] Enroll queued for ${out.queued.length} offline/failed devices, will retry when online`);
   }
 
   return out;
 }
+
+/**
+ * Push visitor face enrollment to all Suprema devices via sidecar.
+ * Similar to employee enrollment but for visitors.
+ */
+async function pushVisitorEnrollmentToDevices(visitor, photoBase64, options = {}) {
+  const out = { attempted: false, results: [], skipped: false, reason: "" };
+  if (!VISITOR_ENROLLMENT_PUSH_DEVICES) {
+    out.skipped = true;
+    out.reason = "disabled";
+    return out;
+  }
+  if (!GSDK_SIDECAR_URL) {
+    out.skipped = true;
+    out.reason = "no_sidecar";
+    return out;
+  }
+  if (!GSDK_GATEWAY || !String(GSDK_GATEWAY).trim()) {
+    out.skipped = true;
+    out.reason = "no_gateway";
+    out.note =
+      "Set GSDK_GATEWAY to device_gateway rpc_server (host:4100), e.g. 192.168.0.200:4100 or host.docker.internal:4100 from Docker.";
+    return out;
+  }
+  if (!photoBase64 || String(photoBase64).length < 80) {
+    out.skipped = true;
+    out.reason = "no_photo";
+    return out;
+  }
+  out.attempted = true;
+  const userId = resolveVisitorSupremaUserIdForDevice(visitor);
+  const devices = await collection("devices").find({}).toArray();
+  const agBody = sidecarAccessGroupBody();
+  out.queued = [];
+
+  // Face Normalize/Extract/Enroll can exceed 60s on some readers; keep backend timeout above sidecar default.
+  const deadline = Math.max(GSDK_SIDECAR_HTTP_MS, 130000);
+
+  for (const d of devices) {
+    const sid = supremaNumericDeviceId(d) >>> 0;
+    if (!sid) continue;
+
+    // Check if device is offline - queue for later if it is
+    const deviceStatus = String(d.status || "").toLowerCase();
+    const isOffline = deviceStatus === "offline" || deviceStatus === "" || !deviceStatus;
+    if (isOffline && DEVICE_SYNC_QUEUE_ENABLED) {
+      const q = await queueDeviceOperation("enroll", sid, visitor?._id, {
+        userId,
+        photoBase64,
+        name: visitor?.name,
+        visitorId: String(visitor?._id || ""),
+        ...agBody
+      });
+      out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      out.results.push({
+        deviceMongoId: String(d._id),
+        supremaDeviceId: sid,
+        ok: false,
+        queued: true,
+        error: "device_offline_queued_for_sync"
+      });
+      continue;
+    }
+
+    try {
+      const useSSL = GSDK_USE_SSL;
+      const body = {
+        gateway: GSDK_GATEWAY,
+        deviceId: sid,
+        userId,
+        name: String(visitor?.name || ""),
+        imageBase64: photoBase64,
+        useSSL,
+        ssl: useSSL,
+        ...agBody
+      };
+      const { response, payload } = await fetchJsonWithTimeout(
+        `${GSDK_SIDECAR_URL}/enrollment/push-face`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        },
+        deadline
+      );
+      const okPush = Boolean(response.ok && payload?.ok);
+      const errDetail =
+        payload?.error ||
+        payload?.message ||
+        (response.ok ? "" : `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`);
+      const row = {
+        deviceMongoId: String(d._id),
+        supremaDeviceId: sid,
+        ok: okPush,
+        error: okPush ? undefined : errDetail || "unknown",
+        enrollmentPath: payload?.enrollmentPath
+      };
+
+      // If enrollment failed, queue for retry
+      if (!row.ok && DEVICE_SYNC_QUEUE_ENABLED) {
+        const q = await queueDeviceOperation("enroll", sid, visitor?._id, {
+          userId,
+          photoBase64,
+          name: visitor?.name,
+          visitorId: String(visitor?._id || ""),
+          ...agBody
+        });
+        out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+        row.queued = true;
+        row.error = row.error || "enroll_failed_queued_for_retry";
+      }
+      out.results.push(row);
+    } catch (e) {
+      // On exception, queue for retry
+      if (DEVICE_SYNC_QUEUE_ENABLED) {
+        const q = await queueDeviceOperation("enroll", sid, visitor?._id, {
+          userId,
+          photoBase64,
+          name: visitor?.name,
+          visitorId: String(visitor?._id || ""),
+          ...agBody
+        });
+        out.queued.push({ deviceMongoId: String(d._id), supremaDeviceId: sid, ...q });
+      }
+      out.results.push({
+        deviceMongoId: String(d._id),
+        supremaDeviceId: sid,
+        ok: false,
+        queued: DEVICE_SYNC_QUEUE_ENABLED,
+        error: e.message
+      });
+    }
+  }
+
+  if (!out.results.length) {
+    out.note =
+      "No gateway device id on readers — run Sync on My Devices or set deviceId / supremaDeviceId.";
+  } else if (out.queued?.length > 0) {
+    console.log(`[visitor-enrollment] Enroll queued for ${out.queued.length} offline/failed devices, will retry when online`);
+  }
+
+  return out;
+}
+
 /**
  * Wizard sends `ssl`; Mongo may store `useSSL` / `ssl`. Sidecar only respected `useSSL`, so `ssl` was ignored → wrong TLS mode (common UNAVAILABLE / handshake failures).
  */
@@ -646,7 +1496,13 @@ function verifyWsClient(urlStr, hostHeader) {
     const u = new URL(urlStr || "/", base);
     const token = u.searchParams.get("token");
     if (!token) return null;
-    return jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    // Check if token has been revoked
+    const userId = decoded?.user?.id || decoded?.id;
+    if (userId && isTokenRevoked(userId)) {
+      return null;
+    }
+    return decoded;
   } catch {
     return null;
   }
@@ -807,9 +1663,9 @@ async function buildAiSnapshot() {
   const start14d = new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000);
   const door = logsDoorEventOnly();
   const [logs24h, logs14d, alerts] = await Promise.all([
-    collection("logs").find({ $and: [door, { $or: [{ createdAt: { $gte: start24h } }, { timestamp: { $gte: start24h } }, { ts: { $gte: start24h } }] }] }).limit(50000).toArray(),
-    collection("logs").find({ $and: [door, { $or: [{ createdAt: { $gte: start14d } }, { timestamp: { $gte: start14d } }, { ts: { $gte: start14d } }] }] }).limit(100000).toArray(),
-    collection("alerts").find({}).sort({ createdAt: -1 }).limit(1000).toArray()
+    collection("logs").find({ $and: [door, { $or: [{ createdAt: { $gte: start24h } }, { timestamp: { $gte: start24h } }, { ts: { $gte: start24h } }] }] }).limit(10000).toArray(),
+    collection("logs").find({ $and: [door, { $or: [{ createdAt: { $gte: start14d } }, { timestamp: { $gte: start14d } }, { ts: { $gte: start14d } }] }] }).limit(20000).toArray(),
+    collection("alerts").find({}).sort({ createdAt: -1 }).limit(500).toArray()
   ]);
   const denied24h = logs24h.filter((l) => isDeniedEvent(l));
   const unknownDenied24h = denied24h.filter((l) => isUnknownIdentity(l));
@@ -1159,6 +2015,10 @@ async function ensureIndexes() {
       createIndexIfMissing(collection("logs"), { accessGranted: 1, createdAt: -1 }, { name: "logs_accessGranted_createdAt" }),
       createIndexIfMissing(collection("logs"), { eventType: 1, createdAt: -1 }, { name: "logs_eventType_createdAt" }),
       createIndexIfMissing(collection("logs"), { zone: 1, createdAt: -1 }, { name: "logs_zone_createdAt" }),
+      // Compound index for device time-range queries (buildAiSnapshot, enrichLogs)
+      createIndexIfMissing(collection("logs"), { deviceId: 1, createdAt: -1 }, { name: "logs_deviceId_createdAt" }),
+      // Index for unknown identity photo recovery queries
+      createIndexIfMissing(collection("logs"), { employeeId: 1, createdAt: -1, photo: 1 }, { sparse: true, name: "logs_empId_created_photo" }),
       // Prevent duplicate Suprema log inserts for same reader/log id.
       createIndexIfMissing(
         collection("logs"),
@@ -1188,7 +2048,13 @@ async function ensureIndexes() {
       createIndexIfMissing(collection("devices"), { deviceId: 1 }, { sparse: true, name: "devices_deviceId" }),
       createIndexIfMissing(collection("devices"), { supremaDeviceId: 1 }, { sparse: true, name: "devices_supremaDeviceId" }),
       createIndexIfMissing(collection("devices"), { ipAddr: 1 }, { sparse: true, name: "devices_ipAddr" }),
-      createIndexIfMissing(collection("companies"), { name: 1 }, { name: "companies_name" })
+      createIndexIfMissing(collection("companies"), { name: 1 }, { name: "companies_name" }),
+
+      // Device sync queue indexes for offline device operation retry
+      createIndexIfMissing(collection("device_sync_queue"), { deviceId: 1, status: 1, createdAt: 1 }, { name: "dsq_device_status_created" }),
+      createIndexIfMissing(collection("device_sync_queue"), { status: 1, nextAttemptAt: 1 }, { name: "dsq_status_nextAttempt" }),
+      createIndexIfMissing(collection("device_sync_queue"), { employeeId: 1, operation: 1 }, { sparse: true, name: "dsq_employee_operation" }),
+      createIndexIfMissing(collection("device_sync_queue"), { createdAt: -1 }, { name: "dsq_created_desc" })
     ]);
     console.log(
       `[backend] Mongo indexes ready (log retention: ${LOG_TTL_ENABLED ? `${LOG_RETENTION_DAYS} days TTL` : "unlimited"}).`
@@ -1283,6 +2149,11 @@ function auth(req, res, next) {
   if (!token) return res.status(401).json({ error: "Unauthorized" });
   try {
     req.user = jwt.verify(token, JWT_SECRET);
+    // Check if token has been revoked (user suspended/deleted)
+    const userId = req.user?.user?.id || req.user?.id;
+    if (userId && isTokenRevoked(userId)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
     return next();
   } catch {
     return res.status(401).json({ error: "Unauthorized" });
@@ -1521,6 +2392,44 @@ async function saveVisitorQrToDisk(visitor, qrToken, scanUrl) {
   }
 }
 
+/**
+ * Saves visitor photo to disk (avoids MongoDB 16MB document limit).
+ * Writes photo.jpg under VISITOR_QR_STORAGE_DIR/{yyyy-mm-dd}/{idTail}_{name}/.
+ */
+async function saveVisitorPhotoToDisk(visitor, photoData) {
+  if (!VISITOR_QR_STORAGE_ENABLED || !visitor || !photoData) return null;
+  try {
+    const idStr = visitor._id && typeof visitor._id.toString === "function" ? visitor._id.toString() : String(visitor._id || "");
+    if (!idStr) return null;
+
+    const datePart = new Date().toISOString().slice(0, 10);
+    const namePart = safeFsSegment(visitor.name || visitor.visitorName || "visitor", 36);
+    const dirName = `${idStr.slice(-6)}_${namePart}`;
+    const relDir = path.join(datePart, dirName);
+    const absDir = path.join(VISITOR_QR_STORAGE_DIR, relDir);
+    await mkdir(absDir, { recursive: true });
+
+    // Extract base64 data from data URL
+    let base64Data = photoData;
+    if (photoData.includes("base64,")) {
+      base64Data = photoData.split("base64,")[1];
+    }
+    base64Data = base64Data.replace(/\s/g, "");
+
+    const photoPath = path.join(absDir, "photo.jpg");
+    await writeFile(photoPath, Buffer.from(base64Data, "base64"));
+
+    return {
+      storageRoot: VISITOR_QR_STORAGE_DIR,
+      relativeDir: relDir.split(path.sep).join("/"),
+      file: "photo.jpg"
+    };
+  } catch (e) {
+    console.error("[backend] visitor photo disk save failed:", e?.message || e);
+    return null;
+  }
+}
+
 async function sendVisitorQrEmail(visitor, qrCodeDataUrl, scanUrl) {
   if (!visitor?.email) return { emailSent: false, reason: "visitor email missing" };
   const transport = getMailer();
@@ -1549,7 +2458,7 @@ const VALID_EMPLOYEE_TAGS = [
   "Sustainability SS05 General Access"
 ];
 
-const EXPORT_DEFAULT_COLUMNS = ["timestamp", "employeeName", "employeeId", "company", "department", "zone", "building", "device", "authMode", "accessGranted", "unknownLiveImageSource", "confidence", "processingMs", "temperature", "direction", "date"];
+const EXPORT_DEFAULT_COLUMNS = ["timestamp", "employeeName", "employeeId", "company", "department", "division", "designation", "zone", "building", "device", "authMode", "accessGranted", "direction", "cardId", "accessLevel", "cardholderStatus", "shiftSchedule", "passIssueDate", "passExpiryDate", "lineManager", "email", "phone", "visitorName", "visitorCompany", "visitorEmail", "visitorMobile", "visitingDepartment", "visitingLocation", "visitingPersonName", "confidence", "processingMs", "temperature", "unknownLiveImageSource", "date"];
 const EXPORT_COLUMN_LABELS = {
   timestamp: "Timestamp",
   date: "Date",
@@ -1557,16 +2466,34 @@ const EXPORT_COLUMN_LABELS = {
   employeeId: "Employee ID",
   company: "Company",
   department: "Department",
+  division: "Division",
+  designation: "Designation",
   zone: "Zone",
   building: "Building",
   device: "Device",
   authMode: "Auth Mode",
   accessGranted: "Access Result",
+  direction: "Entry/Exit",
+  cardId: "Card ID",
+  accessLevel: "Access Level",
+  cardholderStatus: "Cardholder Status",
+  shiftSchedule: "Shift Schedule",
+  passIssueDate: "Pass Issue Date",
+  passExpiryDate: "Pass Expiry Date",
+  lineManager: "Line Manager",
+  email: "Email",
+  phone: "Phone",
+  visitorName: "Visitor Name",
+  visitorCompany: "Visitor Company",
+  visitorEmail: "Visitor Email",
+  visitorMobile: "Visitor Mobile",
+  visitingDepartment: "Visiting Department",
+  visitingLocation: "Visiting Location",
+  visitingPersonName: "Visiting Person Name",
   unknownLiveImageSource: "Unknown Live Image Source",
   confidence: "Confidence (%)",
   processingMs: "Response (ms)",
-  temperature: "Temperature (C)",
-  direction: "Direction"
+  temperature: "Temperature (C)"
 };
 
 function fmtDubai(t) {
@@ -1623,8 +2550,18 @@ function pickLogValue(row, key) {
   }
   if (key === "direction") {
     const inferred = inferDirection(row);
-    return inferred === "out" ? "Exit" : "Entry";
+    return inferred === "out" ? "Exit" : inferred === "in" ? "Entry" : "";
   }
+  // Visitor fields from log or enriched data
+  if (key === "visitorName") return row?.visitorName || row?.name || "";
+  if (key === "visitorCompany") return row?.visitorCompany || row?.company || "";
+  if (key === "visitorEmail") return row?.visitorEmail || "";
+  if (key === "visitorMobile") return row?.visitorMobile || row?.mobile || "";
+  if (key === "visitingDepartment") return row?.visitingDepartment || row?.department || "";
+  if (key === "visitingLocation") return row?.visitingLocation || row?.location || "";
+  if (key === "visitingPersonName") return row?.visitingPersonName || row?.visitingPerson || "";
+  if (key === "email") return row?.email || "";
+  if (key === "phone") return row?.phone || row?.mobile || "";
   return row?.[key] ?? "";
 }
 
@@ -1649,8 +2586,15 @@ function toSimplePdf(rows, columns) {
   const labels = columns.map((c) => EXPORT_COLUMN_LABELS[c] || c);
   const colWidths = columns.map((c) => {
     if (c === "timestamp" || c === "date") return 20;
-    if (c === "employeeName" || c === "employeeId" || c === "zone" || c === "device") return 16;
-    if (c === "accessGranted") return 12;
+    if (c === "employeeName" || c === "visitorName") return 18;
+    if (c === "employeeId" || c === "zone" || c === "device" || c === "cardId") return 14;
+    if (c === "company" || c === "visitorCompany" || c === "department" || c === "visitingDepartment") return 16;
+    if (c === "email" || c === "visitorEmail") return 22;
+    if (c === "accessGranted" || c === "direction") return 10;
+    if (c === "phone" || c === "visitorMobile") return 14;
+    if (c === "visitingPersonName" || c === "lineManager") return 16;
+    if (c === "authMode" || c === "accessLevel" || c === "cardholderStatus") return 14;
+    if (c === "passIssueDate" || c === "passExpiryDate") return 14;
     return 12;
   });
   const fmtCell = (v, w) => {
@@ -1681,7 +2625,7 @@ function toSimplePdf(rows, columns) {
       "",
       headerLine,
       sepLine,
-      ...rowLines
+      ...(rowLines.length ? rowLines : ["(No records found)"])
     ];
     if (truncatedNote) lines.push("", truncatedNote);
     const textOps = ["BT", "/F1 8 Tf", "40 790 Td", "12 TL"];
@@ -2216,8 +3160,8 @@ async function enrichLogs(docs = []) {
       .find(donorQuery)
       .project({ photo: 1, createdAt: 1, timestamp: 1, ts: 1, deviceId: 1, zone: 1, authMode: 1, bioStarEventCode: 1, bioStarSubCode: 1 })
       .sort({ createdAt: -1 })
-      .limit(50000)
-      .toArray(); // raised for large deployments
+      .limit(10000)
+      .toArray(); // bounded for large deployments
     const donorRows = donorRowsRaw.filter((d) => {
       const low = (Number(d.bioStarEventCode ?? 0) >>> 0) & 0xffff;
       const cat = (low >>> 8) & 0xff;
@@ -2359,7 +3303,7 @@ app.get("/api/health", async (_req, res) => {
           ]
         })
         .sort({ createdAt: -1 })
-        .limit(50000)
+        .limit(5000)
         .toArray();
       const seen = new Set();
       let insideEmployees = 0;
@@ -2436,6 +3380,19 @@ app.get("/api/health", async (_req, res) => {
       ...faceAutoRefreshState,
       queued: faceAutoRefreshQueue.size
     },
+    deviceSyncQueue: {
+      enabled: DEVICE_SYNC_QUEUE_ENABLED,
+      tickMs: DEVICE_SYNC_QUEUE_TICK_MS,
+      maxRetries: DEVICE_SYNC_MAX_RETRIES,
+      unlimitedRetention: DEVICE_SYNC_UNLIMITED_RETENTION,
+      maxRetryDelayMs: DEVICE_SYNC_MAX_RETRY_DELAY_MS,
+      batchSize: DEVICE_SYNC_BATCH_SIZE,
+      circuitBreakersOpen: [...deviceSyncCircuitBreakers.entries()].filter(([, cb]) => cb.failures >= CIRCUIT_BREAKER_THRESHOLD).length
+    },
+    tokenRevocation: {
+      revokedEntries: revokedTokenCache.size,
+      wsThrottleEntries: wsThrottleTimestamps.size
+    },
     config: {
       port: PORT,
       mongodbUri: MONGODB_URI,
@@ -2458,6 +3415,11 @@ app.get("/api/health", async (_req, res) => {
       ollama: ollamaError
     },
     gsdk,
+    hostNetwork: {
+      ok: lastHostNetworkStatus.ok,
+      checkedAt: lastHostNetworkStatus.checkedAt,
+      error: lastHostNetworkStatus.error || null
+    },
     /** Non-secret checklist so ops/UI can spot regressions before Access Logs lose unknown/live scan photos. */
     preservation: {
       accessLogsAndEnrollment: {
@@ -2768,6 +3730,9 @@ app.put("/api/employees/:id", async (req, res) => {
 
   if (nowRevoked && !wasRevoked) {
     deviceRevoke = await removeEmployeeFromDevices(updated);
+    // Revoke any active dashboard tokens for this employee (future-proofing)
+    revokeUserTokens(String(updated._id));
+    revokeUserTokens(String(updated.employeeId));
   }
   if (!nowRevoked && wasRevoked) {
     const b64 = employeeEnrollmentPhotoBase64(updated);
@@ -2791,6 +3756,7 @@ app.put("/api/employees/:id", async (req, res) => {
     }
   }
   if (updated) {
+    broadcastEmployeeUpdated(updated);
     return ok(res, { ...updated, deviceRevoke, deviceRekey, deviceRestore });
   }
   return ok(res, { ok: true, deviceRevoke, deviceRekey, deviceRestore });
@@ -2806,6 +3772,9 @@ app.delete("/api/employees/:id", async (req, res) => {
   const existing = await collection("employees").findOne({ _id: oid });
   if (!existing) return fail(res, "Employee not found", 404);
   const deviceRevoke = await removeEmployeeFromDevices(existing);
+  // Revoke any active tokens before deletion
+  revokeUserTokens(String(existing._id));
+  revokeUserTokens(String(existing.employeeId));
   await collection("employees").deleteOne({ _id: oid });
   ok(res, { ok: true, deviceRevoke });
 });
@@ -3120,20 +4089,27 @@ app.get("/api/companies", async (req, res) => {
     collection("companies").find(filter).sort({ name: 1 }).skip(skip).limit(limit).toArray(),
     collection("companies").countDocuments(filter)
   ]);
-  // Attach employee counts per company
+  // Attach employee counts per company (cached for 30s to reduce aggregation load)
   const ids = docs.map(d => String(d._id));
   let countMap = new Map();
   if (ids.length) {
-    const agg = await collection("employees").aggregate([
-      { $match: { $or: [
-        { companyId: { $in: ids } },
-        { company:   { $in: docs.map(d => d.name).filter(Boolean) } }
-      ]}},
-      { $group: { _id: { id: "$companyId", name: "$company" }, count: { $sum: 1 } } }
-    ]).toArray();
-    for (const a of agg) {
-      const k = a._id?.id || a._id?.name;
-      if (k) countMap.set(String(k), (countMap.get(String(k)) || 0) + a.count);
+    const cacheKey = `companyEmpCounts:${ids.sort().join(",")}`;
+    const cached = aggregationCache.get(cacheKey);
+    if (cached) {
+      countMap = cached;
+    } else {
+      const agg = await collection("employees").aggregate([
+        { $match: { $or: [
+          { companyId: { $in: ids } },
+          { company:   { $in: docs.map(d => d.name).filter(Boolean) } }
+        ]}},
+        { $group: { _id: { id: "$companyId", name: "$company" }, count: { $sum: 1 } } }
+      ]).toArray();
+      for (const a of agg) {
+        const k = a._id?.id || a._id?.name;
+        if (k) countMap.set(String(k), (countMap.get(String(k)) || 0) + a.count);
+      }
+      aggregationCache.set(cacheKey, countMap, 30000); // 30s TTL
     }
   }
   const enriched = docs.map(d => ({
@@ -3273,8 +4249,15 @@ app.post("/api/visitors", async (req, res) => {
   const qrToken = randomUUID();
   const scanUrl = `${APP_BASE_URL}/api/visitors/scan/${encodeURIComponent(qrToken)}`;
   const qrCodeDataUrl = await QRCode.toDataURL(scanUrl, { width: 280, margin: 1 });
+
+  // Extract photo data and save to disk (avoid MongoDB 16MB limit)
+  const rawBody = { ...req.body };
+  const photoData = rawBody.visitorPhotoData || rawBody.photo || "";
+  delete rawBody.visitorPhotoData;
+  delete rawBody.photo;
+
   const visitorDoc = {
-    ...toDoc(req.body),
+    ...toDoc(rawBody),
     status: "expected",
     createdAt: now,
     qrToken,
@@ -3283,6 +4266,25 @@ app.post("/api/visitors", async (req, res) => {
   };
   const result = await collection("visitors").insertOne(visitorDoc);
   let visitor = await collection("visitors").findOne({ _id: result.insertedId });
+
+  // Save photo to disk if present
+  let photoLocal = null;
+  if (photoData && String(photoData).length > 100) {
+    photoLocal = await saveVisitorPhotoToDisk(visitor, photoData);
+    if (photoLocal) {
+      await collection("visitors").updateOne(
+        { _id: visitor._id },
+        {
+          $set: {
+            photoStorageRelativeDir: photoLocal.relativeDir,
+            photoStorageFile: photoLocal.file,
+            updatedAt: new Date()
+          }
+        }
+      );
+    }
+  }
+
   const qrLocal = await saveVisitorQrToDisk(visitor, qrToken, scanUrl);
   if (qrLocal) {
     await collection("visitors").updateOne(
@@ -3298,10 +4300,25 @@ app.post("/api/visitors", async (req, res) => {
     );
     visitor = await collection("visitors").findOne({ _id: result.insertedId });
   }
+
+  // Push face enrollment to devices if photo was saved
+  let deviceEnroll = null;
+  if (photoLocal && visitor) {
+    try {
+      const photoBase64 = await loadVisitorPhotoFromDisk(visitor);
+      if (photoBase64) {
+        deviceEnroll = await pushVisitorEnrollmentToDevices(visitor, photoBase64);
+      }
+    } catch (e) {
+      console.error("[visitors] Device enroll error on create:", e?.message || e);
+    }
+  }
+
   const email = await sendVisitorQrEmail(visitor, qrCodeDataUrl, scanUrl);
   ok(res, {
     ...visitor,
     email,
+    deviceEnroll,
     qrLocalStorage: qrLocal
       ? {
           root: qrLocal.storageRoot,
@@ -3328,8 +4345,19 @@ app.delete("/api/visitors/:id", async (req, res) => {
   const filter = await visitorFilter(req.params.id);
   const doc = await collection("visitors").findOne(filter);
   if (!doc) return fail(res, "Visitor not found", 404);
+
+  // Revoke from devices before deleting from database
+  let deviceRevoke = null;
+  if (doc?.photoStorageFile) {
+    try {
+      deviceRevoke = await removeVisitorFromDevices(doc);
+    } catch (e) {
+      console.error("[visitors] Device revoke error on delete:", e?.message || e);
+    }
+  }
+
   await collection("visitors").deleteOne(filter);
-  ok(res, { ok: true });
+  ok(res, { ok: true, deviceRevoke });
 });
 app.post("/api/visitors/:id/suspend", async (req, res) => {
   const filter = await visitorFilter(req.params.id);
@@ -3340,7 +4368,34 @@ app.post("/api/visitors/:id/suspend", async (req, res) => {
   await collection("visitors").updateOne(filter, {
     $set: { status: newStatus, _prevStatus: isSuspended ? undefined : doc.status, updatedAt: new Date() }
   });
-  ok(res, { ok: true, status: newStatus });
+
+  // Sync to devices: revoke when suspending, re-enroll when restoring
+  let deviceRevoke = null;
+  let deviceEnroll = null;
+  if (!isSuspended && newStatus === "suspended") {
+    // Suspending - revoke from devices
+    if (doc?.photoStorageFile) {
+      try {
+        deviceRevoke = await removeVisitorFromDevices(doc);
+      } catch (e) {
+        console.error("[visitors] Device revoke error on suspend:", e?.message || e);
+      }
+    }
+  } else if (isSuspended && newStatus !== "suspended") {
+    // Restoring - re-enroll to devices if photo exists
+    if (doc?.photoStorageFile) {
+      try {
+        const photoBase64 = await loadVisitorPhotoFromDisk(doc);
+        if (photoBase64) {
+          deviceEnroll = await pushVisitorEnrollmentToDevices(doc, photoBase64);
+        }
+      } catch (e) {
+        console.error("[visitors] Device enroll error on restore:", e?.message || e);
+      }
+    }
+  }
+
+  ok(res, { ok: true, status: newStatus, deviceRevoke, deviceEnroll });
 });
 app.get("/api/visitors/:id/footprint", async (req, res) => {
   const v = await collection("visitors").findOne(await visitorFilter(req.params.id));
@@ -3368,7 +4423,133 @@ app.get("/api/visitors/scan/:token", async (req, res) => {
   return res.type("html").send(`<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${title}</title></head><body style="font-family:Arial,sans-serif;background:#0b1523;color:#e2eaff;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px"><div style="max-width:560px;width:100%;background:#121f35;border:1px solid #1a2d4a;border-radius:14px;padding:22px;text-align:center"><h2 style="margin:0 0 8px;color:#20d68a">${title}</h2><p style="margin:0 0 10px">Visitor: <b>${visitor.name || "Guest"}</b></p><p style="margin:0 0 4px;color:#9fb6d4">Host: ${visitor.host || "N/A"}</p><p style="margin:0;color:#9fb6d4">Purpose: ${visitor.purpose || "N/A"}</p></div></body></html>`);
 });
 
+/** Re-push visitor face enrollment to all devices. Use after photo update or when devices were offline during initial enrollment. */
+app.post("/api/visitors/:id/sync-face", async (req, res) => {
+  const filter = await visitorFilter(req.params.id);
+  const visitor = await collection("visitors").findOne(filter);
+  if (!visitor) return fail(res, "Visitor not found", 404);
+  if (!visitor?.photoStorageFile) {
+    return fail(res, "No stored enrollment photo — upload a photo first.", 400);
+  }
+  try {
+    const photoBase64 = await loadVisitorPhotoFromDisk(visitor);
+    if (!photoBase64 || photoBase64.length < 80) {
+      return fail(res, "Could not load stored photo — re-upload required.", 400);
+    }
+    const devicePush = await pushVisitorEnrollmentToDevices(visitor, photoBase64);
+    const okAny = Array.isArray(devicePush?.results) && devicePush.results.some((r) => r?.ok);
+    if (!okAny) {
+      const firstErr = devicePush?.results?.find?.((r) => !r?.ok)?.error || "Face push failed on reader.";
+      return res.status(502).json({ error: friendlyEnrollmentError(firstErr), devicePush });
+    }
+    // Store the supremaUserId if enrollment succeeded
+    const userId = resolveVisitorSupremaUserIdForDevice(visitor);
+    await collection("visitors").updateOne(
+      { _id: visitor._id },
+      { $set: { supremaUserId: userId, updatedAt: new Date() } }
+    );
+    return ok(res, { ok: true, devicePush, supremaUserId: userId });
+  } catch (e) {
+    return fail(res, friendlyEnrollmentError(e.message || "Face sync failed"), 502);
+  }
+});
+
+/** Update visitor photo and optionally push to devices */
+app.post("/api/visitors/:id/photo", async (req, res) => {
+  const filter = await visitorFilter(req.params.id);
+  const visitor = await collection("visitors").findOne(filter);
+  if (!visitor) return fail(res, "Visitor not found", 404);
+
+  const photoData = req.body?.photo || req.body?.visitorPhotoData || "";
+  if (!photoData || String(photoData).length < 100) {
+    return fail(res, "Photo data required (base64 JPEG)", 400);
+  }
+
+  // Save new photo to disk
+  const photoLocal = await saveVisitorPhotoToDisk(visitor, photoData);
+  if (!photoLocal) {
+    return fail(res, "Failed to save photo", 500);
+  }
+
+  // Update visitor record
+  await collection("visitors").updateOne(
+    { _id: visitor._id },
+    {
+      $set: {
+        photoStorageRelativeDir: photoLocal.relativeDir,
+        photoStorageFile: photoLocal.file,
+        updatedAt: new Date()
+      }
+    }
+  );
+
+  // Push to devices if requested (default true)
+  let deviceEnroll = null;
+  const shouldSync = req.body?.syncToDevices !== false;
+  if (shouldSync) {
+    try {
+      const photoBase64 = await loadVisitorPhotoFromDisk({
+        photoStorageRelativeDir: photoLocal.relativeDir,
+        photoStorageFile: photoLocal.file
+      });
+      if (photoBase64) {
+        deviceEnroll = await pushVisitorEnrollmentToDevices(
+          { ...visitor, photoStorageRelativeDir: photoLocal.relativeDir, photoStorageFile: photoLocal.file },
+          photoBase64
+        );
+      }
+    } catch (e) {
+      console.error("[visitors] Device enroll error on photo update:", e?.message || e);
+    }
+  }
+
+  ok(res, { ok: true, photoLocal, deviceEnroll });
+});
+
 app.get("/api/devices", async (_req, res) => ok(res, await collection("devices").find({}).toArray()));
+
+/** Device sync queue status endpoint - returns counts of pending/failed operations */
+app.get("/api/devices/sync-queue", async (_req, res) => {
+  if (!mongoConnected) return fail(res, "MongoDB unavailable", 503);
+  const stats = await getDeviceSyncQueueStats();
+  const recentPending = await collection("device_sync_queue")
+    .find({ status: "pending" })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .project({ deviceId: 1, employeeId: 1, operation: 1, status: 1, attempts: 1, createdAt: 1, lastError: 1 })
+    .toArray();
+  ok(res, { stats, recentPending, enabled: DEVICE_SYNC_QUEUE_ENABLED });
+});
+
+/** Device sync queue status for a specific device */
+app.get("/api/devices/:id/sync-queue", async (req, res) => {
+  if (!mongoConnected) return fail(res, "MongoDB unavailable", 503);
+  const filter = await deviceFilter(req.params.id);
+  const device = await collection("devices").findOne(filter);
+  if (!device) return fail(res, "Device not found", 404);
+  const sid = supremaNumericDeviceId(device) >>> 0;
+  if (!sid) return fail(res, "Device has no Suprema device ID", 400);
+  const stats = await getDeviceSyncQueueStats(sid);
+  const pending = await collection("device_sync_queue")
+    .find({ deviceId: sid, status: "pending" })
+    .sort({ createdAt: 1 })
+    .project({ employeeId: 1, operation: 1, status: 1, attempts: 1, createdAt: 1, nextAttemptAt: 1, lastError: 1 })
+    .toArray();
+  ok(res, { deviceId: sid, stats, pending, enabled: DEVICE_SYNC_QUEUE_ENABLED });
+});
+
+/** Trigger immediate sync queue processing for a device */
+app.post("/api/devices/:id/sync-queue/process", async (req, res) => {
+  if (!mongoConnected) return fail(res, "MongoDB unavailable", 503);
+  if (!GSDK_SIDECAR_URL) return fail(res, "Sidecar not configured", 503);
+  const filter = await deviceFilter(req.params.id);
+  const device = await collection("devices").findOne(filter);
+  if (!device) return fail(res, "Device not found", 404);
+  const sid = supremaNumericDeviceId(device) >>> 0;
+  if (!sid) return fail(res, "Device has no Suprema device ID", 400);
+  const result = await processDeviceSyncQueueForDevice(sid, { batchSize: req.body?.batchSize || DEVICE_SYNC_BATCH_SIZE });
+  ok(res, { deviceId: sid, ...result, processed: result.processed, errors: result.errors });
+});
 
 /** Suprema thermal logs often use integer hundredths °C (3650 → 36.5°C). */
 function normalizeAccessLogTemperature(raw = {}) {
@@ -4975,6 +6156,7 @@ app.post("/api/enrollment/submit", async (req, res) => {
     ts: now
   });
 
+  if (empRow) broadcastEmployeeUpdated(empRow);
   ok(res, { ok: true, enrolled: true, submittedAt: now, devicePush });
 });
 
@@ -5221,6 +6403,7 @@ let deviceEventPullerStarted = false;
 let centralApiPollerStarted = false;
 let selfHealingStarted = false;
 let watchdogStarted = false;
+let deviceSyncQueueStarted = false;
 const selfHealState = {
   enabled: SELF_HEALING_ENABLED,
   lastRunAt: null,
@@ -5289,10 +6472,93 @@ function checkTcpReachability(ip, port, timeoutMs = 8000) {
   });
 }
 
+/** Check if host has network connectivity to reach devices.
+ * Returns {ok: boolean, error?: string} */
+async function checkHostNetworkConnectivity() {
+  try {
+    // Check if we can reach the gateway sidecar first (if configured)
+    if (GSDK_SIDECAR_URL) {
+      const gwCheck = await fetchJsonWithTimeout(`${GSDK_SIDECAR_URL}/health`, {}, 3000).catch(() => null);
+      if (gwCheck?.response?.ok) {
+        return { ok: true };
+      }
+    }
+
+    // Check default gateway route is available
+    const platform = os.platform();
+    if (platform === "linux") {
+      try {
+        // Check if default route exists
+        const { stdout } = await execAsync("ip route | grep default | head -1", { timeout: 2000 });
+        if (!stdout || !stdout.trim()) {
+          return { ok: false, error: "No default gateway route" };
+        }
+      } catch {
+        return { ok: false, error: "Cannot verify network routes" };
+      }
+    } else if (platform === "win32") {
+      try {
+        const { stdout } = await execAsync("route print | findstr 0.0.0.0", { timeout: 2000 });
+        if (!stdout || !stdout.trim()) {
+          return { ok: false, error: "No default gateway route" };
+        }
+      } catch {
+        return { ok: false, error: "Cannot verify network routes" };
+      }
+    }
+
+    // Final fallback: check if any network interface is up (except loopback)
+    const interfaces = os.networkInterfaces();
+    const hasExternalInterface = Object.entries(interfaces).some(([name, addrs]) => {
+      if (name.startsWith("lo") || name === "Loopback Pseudo-Interface 1") return false;
+      return addrs.some(a => !a.internal && a.family === "IPv4");
+    });
+
+    if (!hasExternalInterface) {
+      return { ok: false, error: "No active network interfaces" };
+    }
+
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e?.message || "Network check failed" };
+  }
+}
+
+let lastHostNetworkStatus = { ok: true, checkedAt: 0 };
+
 async function tickDeviceHealth() {
   if (!mongoConnected) return;
   const docs = await collection("devices").find({}).toArray();
   if (!docs.length) return;
+
+  // Check host network connectivity first
+  const hostNetwork = await checkHostNetworkConnectivity();
+  lastHostNetworkStatus = { ok: hostNetwork.ok, checkedAt: Date.now(), error: hostNetwork.error };
+
+  // If host network is down, mark all devices as offline immediately
+  if (!hostNetwork.ok) {
+    const now = new Date();
+    const offlinePatches = docs.map((d) => ({
+      _id: d._id,
+      patch: {
+        status: "offline",
+        lastCheckedAt: now,
+        responseMs: null,
+        healthError: `Host network down: ${hostNetwork.error || "no connectivity"}`
+      }
+    }));
+    await collection("devices").bulkWrite(
+      offlinePatches.map((x) => ({
+        updateOne: {
+          filter: { _id: x._id },
+          update: { $set: { ...x.patch, updatedAt: now } }
+        }
+      })),
+      { ordered: false }
+    );
+    return;
+  }
+
   let gatewaySnapshot = null;
   if (DEVICE_HEALTH_GATEWAY_FALLBACK && GSDK_SIDECAR_URL) {
     gatewaySnapshot = await testDeviceWithSidecar({}).catch(() => null);
@@ -5362,6 +6628,18 @@ async function tickDeviceHealth() {
     })
   );
   if (!checks.length) return;
+
+  // Identify devices transitioning from offline to online for sync queue processing
+  const devicesWentOnline = [];
+  for (const check of checks) {
+    const prevStatus = String(docs.find(d => String(d._id) === String(check._id))?.status || "").toLowerCase();
+    const newStatus = String(check.patch.status || "").toLowerCase();
+    if ((prevStatus === "offline" || prevStatus === "" || prevStatus === "warning") && newStatus === "online") {
+      const device = docs.find(d => String(d._id) === String(check._id));
+      if (device) devicesWentOnline.push(device);
+    }
+  }
+
   await collection("devices").bulkWrite(
     checks.map((x) => ({
       updateOne: {
@@ -5371,6 +6649,23 @@ async function tickDeviceHealth() {
     })),
     { ordered: false }
   );
+
+  // Process sync queue for devices that just came online
+  if (DEVICE_SYNC_QUEUE_ENABLED && devicesWentOnline.length > 0 && GSDK_SIDECAR_URL) {
+    console.log(`[device-health] ${devicesWentOnline.length} device(s) came online, processing sync queue...`);
+    for (const d of devicesWentOnline) {
+      const sid = supremaNumericDeviceId(d) >>> 0;
+      if (!sid) continue;
+      try {
+        const result = await processDeviceSyncQueueForDevice(sid, { batchSize: DEVICE_SYNC_BATCH_SIZE });
+        if (result.processed > 0) {
+          console.log(`[device-health] Synced ${result.processed} queued operations to device ${sid}`);
+        }
+      } catch (e) {
+        console.warn(`[device-health] Failed to process sync queue for device ${sid}:`, e?.message);
+      }
+    }
+  }
 }
 
 async function tickDeviceEventPull() {
@@ -6127,6 +7422,7 @@ app.post("/api/export/generate", async (req, res) => {
   if (filters.zone) parts.push({ zone: filters.zone });
   const query = parts.length === 0 ? {} : parts.length === 1 ? parts[0] : { $and: parts };
   const rows = await collection("logs").find(query).sort({ createdAt: -1 }).toArray(); // no cap — export all matching logs
+  if (!rows.length) return res.status(400).json({ error: "No records match the selected filters. Adjust the date range or filters and try again." });
   const enrichedRows = await enrichLogs(rows);
   const stamp = new Date().toISOString().replaceAll(":", "-");
 
@@ -6212,6 +7508,8 @@ app.post("/api/superadmin/accounts/:id/revoke", async (req, res) => {
   if (!current) return res.status(404).json({ error: "Account not found" });
   if (current.role === "superadmin") return res.status(403).json({ error: "Superadmin cannot be revoked" });
   await collection("accounts").updateOne(filter, { $set: { status: "revoked", updatedAt: new Date() } });
+  // Immediately revoke all active tokens for this account
+  revokeUserTokens(String(current._id));
   return ok(res, { ok: true });
 });
 app.delete("/api/superadmin/accounts/:id", async (req, res) => {
@@ -6607,6 +7905,16 @@ httpServer.listen(PORT, async () => {
     setInterval(() => {
       tickWatchdog().catch(() => {});
     }, WATCHDOG_TICK_MS);
+  }
+  if (DEVICE_SYNC_QUEUE_ENABLED && !deviceSyncQueueStarted) {
+    deviceSyncQueueStarted = true;
+    // Initial run after 10 seconds to let other systems stabilize
+    setTimeout(() => {
+      tickDeviceSyncQueue().catch(() => {});
+    }, 10000);
+    setInterval(() => {
+      tickDeviceSyncQueue().catch(() => {});
+    }, DEVICE_SYNC_QUEUE_TICK_MS);
   }
   trySetAcceptFilterViaSidecar().catch(() => {});
   setInterval(() => {
