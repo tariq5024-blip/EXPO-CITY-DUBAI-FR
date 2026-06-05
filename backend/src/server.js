@@ -4632,6 +4632,15 @@ function normalizeDeviceEvent(raw = {}, fallback = {}) {
     eventType = "ENROLLMENT";
     accessGranted = false;
   }
+  // Device system/monitor events (face-detect noise, invalid-user system codes) outside the known
+  // BioStar auth range (0x1000–0x1A00) that produced no real employeeId are system noise — mark
+  // as ENROLLMENT so they are permanently excluded from all door-event queries.
+  const isAuthRangeCode = mainLow >= 0x1000 && mainLow <= 0x1a00;
+  const hasRealEmployeeId = employeeId && !/^UNKNOWN-/i.test(employeeId);
+  if (!isAuthRangeCode && bioCode > 0 && !hasRealEmployeeId && eventType !== "ENROLLMENT") {
+    eventType = "ENROLLMENT";
+    accessGranted = false;
+  }
   if (typeof accessGranted !== "boolean") {
     if (eventType === "ACCESS_GRANTED") accessGranted = true;
     else if (eventType === "ACCESS_DENIED") accessGranted = false;
@@ -5601,7 +5610,13 @@ function dubaiDayStartEnd(now = new Date()) {
 
 /** Reader auth outcomes only — not enrollment/audit rows in the same `logs` collection. */
 function logsDoorEventOnly() {
-  return { $nor: [{ eventType: "ENROLLMENT" }] };
+  return {
+    $nor: [
+      { eventType: "ENROLLMENT" },
+      // Exclude ACCESS_UNKNOWN events generated for unmatched faces (no real user — synthetic UNKNOWN-* ID)
+      { eventType: "ACCESS_UNKNOWN", employeeId: { $regex: /^UNKNOWN-/i } }
+    ]
+  };
 }
 
 const FOOTPRINT_LOG_LIMIT = Math.min(Math.max(Number(process.env.FOOTPRINT_LOG_LIMIT || 10000), 50), 500000);
