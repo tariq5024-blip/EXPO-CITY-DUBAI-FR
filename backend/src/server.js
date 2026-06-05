@@ -4632,15 +4632,6 @@ function normalizeDeviceEvent(raw = {}, fallback = {}) {
     eventType = "ENROLLMENT";
     accessGranted = false;
   }
-  // Device system/monitor events (face-detect noise, invalid-user system codes) outside the known
-  // BioStar auth range (0x1000–0x1A00) that produced no real employeeId are system noise — mark
-  // as ENROLLMENT so they are permanently excluded from all door-event queries.
-  const isAuthRangeCode = mainLow >= 0x1000 && mainLow <= 0x1a00;
-  const hasRealEmployeeId = employeeId && !/^UNKNOWN-/i.test(employeeId);
-  if (!isAuthRangeCode && bioCode > 0 && !hasRealEmployeeId && eventType !== "ENROLLMENT") {
-    eventType = "ENROLLMENT";
-    accessGranted = false;
-  }
   if (typeof accessGranted !== "boolean") {
     if (eventType === "ACCESS_GRANTED") accessGranted = true;
     else if (eventType === "ACCESS_DENIED") accessGranted = false;
@@ -4666,6 +4657,16 @@ function normalizeDeviceEvent(raw = {}, fallback = {}) {
   ).trim();
   const bioUser = String(raw.userid ?? raw.userID ?? "").trim();
   if (!employeeId && bioUser) employeeId = bioUser;
+
+  // Device system/monitor events (face-detect noise, invalid-user system codes) outside the known
+  // BioStar auth range (0x1000–0x1A00) that produced no real employeeId are system noise — mark
+  // as ENROLLMENT so they are permanently excluded from all door-event queries.
+  const isAuthRangeCode = mainLow >= 0x1000 && mainLow <= 0x1a00;
+  const hasRealEmployeeId = employeeId && !/^UNKNOWN-/i.test(employeeId);
+  if (!isAuthRangeCode && bioCode > 0 && !hasRealEmployeeId && eventType !== "ENROLLMENT") {
+    eventType = "ENROLLMENT";
+    accessGranted = false;
+  }
 
   let employeeName = String(
     raw.employeeName || raw.name || raw.userName || raw.username || raw.personName || ""
